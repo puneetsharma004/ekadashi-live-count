@@ -146,15 +146,15 @@ const AppContent = () => {
 
             {/* ✅ Admin notification when seeing Home during countdown */}
             {userIsAdmin && eventStatus === 'BEFORE_START' && (
-              <div className="mb-4 p-3 bg-gradient-to-r from-red-900/20 to-orange-900/20 border border-red-500/30 rounded-lg">
-                <div className="flex items-center space-x-2">
+              <div className="p-3 bg-gradient-to-r from-red-900/20 to-orange-900/20 border border-red-500/30 rounded-lg mt-5 mb-10">
+                <div className="flex items-center justify-center space-x-2 text-center">
                   <span className="text-red-400 font-bold">👨‍💼 ADMIN OVERRIDE</span>
                   <span className="text-gray-300">|</span>
                   <span className="text-gray-300 text-sm">
                     Event in countdown mode - You have full admin access
                   </span>
                 </div>
-                <p className="text-gray-400 text-xs mt-1">
+                <p className="text-gray-400 text-xs mt-1 text-center">
                   Regular users are seeing countdown timer. You can start the event early or manage settings.
                 </p>
               </div>

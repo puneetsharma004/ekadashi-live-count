@@ -36,7 +36,7 @@ const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 
 // Development mode - set to true for testing
-export const DEV_MODE = true;
+export const DEV_MODE = false;
 
 // Admin credentials - change these!
 export const ADMIN_PHONE = "1234567890";
