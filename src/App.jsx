@@ -5,19 +5,24 @@ import AuthForm from './components/AuthForm.jsx';
 import Home from './pages/Home.jsx';
 import CountdownTimer from './components/CountdownTimer.jsx';
 import Navbar from './components/Navbar.jsx';
-import { getEventStatus } from './services/firebase.js';
+import { getEventStatus, isAdmin } from './services/firebase.js'; // ✅ Added isAdmin import
 
 // Main App Content (inside AuthProvider)
 const AppContent = () => {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, user } = useAuth(); // ✅ Added user
   const { settings: eventSettings, loading: settingsLoading } = useEventSettings();
+
+  // ✅ NEW: Check if current user is admin
+  const userIsAdmin = user && isAdmin(user.phone);
 
   // 🔍 DEBUG: Add console logs to see what's happening
   // console.log('🔍 App Debug:', {
   //   isAuthenticated,
   //   loading,
   //   eventSettings,
-  //   settingsLoading
+  //   settingsLoading,
+  //   userIsAdmin,
+  //   userPhone: user?.phone
   // });
 
   // ✅ FIXED: Add timeout for loading states to prevent infinite loading
@@ -36,7 +41,7 @@ const AppContent = () => {
   // Show loading screen while checking authentication or settings
   // ✅ FIXED: Add timeout escape hatch
   if ((loading || settingsLoading) && !debugTimeout) {
-    console.log('🔍 Showing loading screen');
+    // console.log('🔍 Showing loading screen');
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -53,7 +58,7 @@ const AppContent = () => {
 
   // If not authenticated, show login/register form
   if (!isAuthenticated) {
-    console.log('🔍 Showing auth form');
+    // console.log('🔍 Showing auth form');
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <AuthForm />
@@ -63,7 +68,7 @@ const AppContent = () => {
 
   // ✅ FIXED: Get actual event status (no dev mode override)
   const eventStatus = getEventStatus(eventSettings);
-  console.log('🔍 Event Status:', eventStatus, 'Event Settings:', eventSettings);
+  // console.log('🔍 Event Status:', eventStatus, 'User is Admin:', userIsAdmin);
 
   // If authenticated, show main app based on event status
   return (
@@ -71,13 +76,15 @@ const AppContent = () => {
       <Navbar />
       
       <main className="container mx-auto px-4 py-6">
-        {/* 🔍 DEBUG: Show current status (uncomment for debugging) */}
-        <div className="mb-4 p-2 bg-gray-800 text-white text-sm rounded">
-          Debug: Status = {eventStatus} | Event Active = {eventSettings?.eventActive ? 'Yes' : 'No'} | Event Status = {eventSettings?.status}
-        </div>
+        {/* 🔍 DEBUG: Show current status for admins */}
+        {/* {userIsAdmin && (
+          <div className="mb-4 p-2 bg-red-800 text-white text-sm rounded">
+            👨‍💼 ADMIN MODE: Status = {eventStatus} | Event Active = {eventSettings?.eventActive ? 'Yes' : 'No'} | Event Status = {eventSettings?.status}
+          </div>
+        )} */}
 
-        {/* ✅ FIXED: Show countdown for BEFORE_START status */}
-        {eventStatus === 'BEFORE_START' && (
+        {/* ✅ FIXED: Show countdown ONLY for regular users during BEFORE_START */}
+        {eventStatus === 'BEFORE_START'  && (
           <div className="text-center">
             <div className="max-w-4xl mx-auto">
               {/* ✅ Enhanced countdown with better spacing and design */}
@@ -119,26 +126,59 @@ const AppContent = () => {
           </div>
         )}
 
-        {/* ✅ FIXED: Show Home component for ACTIVE status */}
-        {eventStatus === 'ACTIVE' && (
+        {/* ✅ FIXED: Admins ALWAYS see Home component (regardless of event status) */}
+        {/* Regular users see Home only when event is ACTIVE */}
+        {(eventStatus === 'ACTIVE' || userIsAdmin) && (
           <div>
-            {/* ✅ Event Started Animation */}
-            <div className="mb-6 text-center animate-fade-in">
-              <div className="bg-gradient-to-r from-green-500/20 to-saffron-500/20 rounded-lg p-4 border border-green-500/50">
-                <h2 className="text-2xl font-bold text-green-400 mb-2">
-                  🎉 Event Started!
-                </h2>
-                <p className="text-gray-300">
-                  You can now submit your chant rounds. Good luck! 🙏
+            {/* Show "Event Started" animation only for regular users when event becomes active */}
+            {eventStatus === 'ACTIVE' && !userIsAdmin && (
+              <div className="mb-6 text-center animate-fade-in">
+                <div className="bg-gradient-to-r from-green-500/20 to-saffron-500/20 rounded-lg p-4 border border-green-500/50">
+                  <h2 className="text-2xl font-bold text-green-400 mb-2">
+                    🎉 Event Started!
+                  </h2>
+                  <p className="text-gray-300">
+                    You can now submit your chant rounds. Good luck! 🙏
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* ✅ Admin notification when seeing Home during countdown */}
+            {userIsAdmin && eventStatus === 'BEFORE_START' && (
+              <div className="mb-4 p-3 bg-gradient-to-r from-red-900/20 to-orange-900/20 border border-red-500/30 rounded-lg">
+                <div className="flex items-center space-x-2">
+                  <span className="text-red-400 font-bold">👨‍💼 ADMIN OVERRIDE</span>
+                  <span className="text-gray-300">|</span>
+                  <span className="text-gray-300 text-sm">
+                    Event in countdown mode - You have full admin access
+                  </span>
+                </div>
+                <p className="text-gray-400 text-xs mt-1">
+                  Regular users are seeing countdown timer. You can start the event early or manage settings.
                 </p>
               </div>
-            </div>
+            )}
+
+            {/* ✅ Admin notification for other statuses */}
+            {userIsAdmin && eventStatus !== 'ACTIVE' && eventStatus !== 'BEFORE_START' && (
+              <div className="mb-4 p-3 bg-gradient-to-r from-blue-900/20 to-purple-900/20 border border-blue-500/30 rounded-lg">
+                <div className="flex items-center space-x-2">
+                  <span className="text-blue-400 font-bold">👨‍💼 ADMIN MODE</span>
+                  <span className="text-gray-300">|</span>
+                  <span className="text-gray-300 text-sm">
+                    Event Status: {eventStatus} - Full control available
+                  </span>
+                </div>
+              </div>
+            )}
+
             <Home eventSettings={eventSettings} />
           </div>
         )}
 
-        {/* ✅ Show paused/stopped events */}
-        {eventStatus === 'STOPPED' && (
+        {/* ✅ Show paused/stopped events (for regular users only - admins see Home) */}
+        {eventStatus === 'STOPPED' && !userIsAdmin && (
           <div className="text-center">
             <div className="card-devotional max-w-md mx-auto">
               <h2 className="text-2xl font-bold text-red-400 mb-4">
@@ -154,8 +194,8 @@ const AppContent = () => {
           </div>
         )}
 
-        {/* ✅ Show completed events */}
-        {eventStatus === 'COMPLETED' && (
+        {/* ✅ Show completed events (for regular users only - admins see Home) */}
+        {eventStatus === 'COMPLETED' && !userIsAdmin && (
           <div className="text-center">
             <div className="card-devotional max-w-md mx-auto">
               <h2 className="text-2xl font-bold text-blue-400 mb-4">
@@ -174,8 +214,8 @@ const AppContent = () => {
           </div>
         )}
 
-        {/* ✅ Show ended events */}
-        {eventStatus === 'ENDED' && (
+        {/* ✅ Show ended events (for regular users only - admins see Home) */}
+        {eventStatus === 'ENDED' && !userIsAdmin && (
           <div className="text-center">
             <div className="card-devotional max-w-md mx-auto">
               <h2 className="text-2xl font-bold text-gray-400 mb-4">
@@ -191,16 +231,25 @@ const AppContent = () => {
           </div>
         )}
 
-        {/* ✅ Show no event message */}
+        {/* ✅ Show no event message (for everyone) */}
         {eventStatus === 'NO_EVENT' && (
           <div className="text-center">
             <div className="card-devotional max-w-md mx-auto">
               <h2 className="text-2xl font-bold text-gray-400 mb-4">
                 📅 No Active Event
               </h2>
-              <p className="text-gray-300">
-                There is currently no event scheduled. Please wait for an admin to create a new event.
+              <p className="text-gray-300 mb-4">
+                There is currently no event scheduled.
               </p>
+              {userIsAdmin ? (
+                <p className="text-saffron-400 font-semibold">
+                  👨‍💼 Use the admin panel to create a new event.
+                </p>
+              ) : (
+                <p className="text-gray-400">
+                  Please wait for an admin to create a new event.
+                </p>
+              )}
             </div>
           </div>
         )}
