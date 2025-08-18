@@ -57,6 +57,8 @@ export const AuthProvider = ({ children }) => {
       if (phoneExists) {
         throw new Error('Phone number already registered');
       }
+      // Check if admin
+      const adminCheck = isAdmin(cleanPhone);
 
       if (adminCheck) {
       const adminPassword = prompt('Enter admin password:');
