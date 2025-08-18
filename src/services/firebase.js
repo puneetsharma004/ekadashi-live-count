@@ -39,8 +39,8 @@ export const db = getFirestore(app);
 export const DEV_MODE = false;
 
 // Admin credentials - change these!
-export const ADMIN_PHONE = "1234567890";
-export const ADMIN_PASSWORD = "admin123";
+export const ADMIN_PHONE = "7483916205";
+export const ADMIN_PASSWORD = "t9X@7fQ1Lp";
 
 // Collection references
 export const USERS_COLLECTION = 'users';
