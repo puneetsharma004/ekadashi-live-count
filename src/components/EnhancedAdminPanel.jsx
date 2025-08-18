@@ -123,19 +123,26 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
     }
   };
 
-  const handleArchiveCurrentEvent = async () => {
-    if (window.confirm('Archive current event? This will clear all participant data and save event history.')) {
-      setLoading(true);
-      const result = await archiveCurrentEvent();
-      if (result.success) {
-        showMessage('success', '📁 Event archived successfully!');
-        loadEventsHistory();
-      } else {
-        showMessage('error', `Failed to archive event: ${result.error}`);
-      }
-      setLoading(false);
+ const handleArchiveCurrentEvent = async () => {
+  if (window.confirm(
+    'Archive current event?\n\n' +
+    '• Event history will be saved\n' +
+    '• Participant accounts will be preserved\n' + 
+    '• Chant counts will be reset to 0\n' +
+    '• Leaderboard will be cleared\n\n' +
+    'Users can participate in future events with the same accounts.'
+  )) {
+    setLoading(true);
+    const result = await archiveCurrentEvent();
+    if (result.success) {
+      showMessage('success', '📁 Event archived successfully! User accounts preserved, chant counts reset.');
+      loadEventsHistory();
+    } else {
+      showMessage('error', `Failed to archive event: ${result.error}`);
     }
-  };
+    setLoading(false);
+  }
+};
 
   const activeParticipants = participants.filter(p => p.chantCount > 0);
   const progressPercentage = eventSettings?.globalGoal ? 
@@ -195,6 +202,8 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
           </p>
         </div>
       </div>
+
+      
 
       {/* Dashboard View */}
       {currentView === 'dashboard' && (

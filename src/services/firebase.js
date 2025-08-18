@@ -16,10 +16,11 @@ import {
   getDoc,
   deleteDoc,
   serverTimestamp,
-  Timestamp
+  Timestamp, 
+  limit
 } from 'firebase/firestore';
 
-// TODO: Replace with your Firebase config
+// Firebase config
 const firebaseConfig = {
   apiKey: "AIzaSyDRthSJrs6gJlZpmnU03kS8ZPynqfYILcc",
   authDomain: "ekadashi-live-count.firebaseapp.com",
@@ -44,9 +45,9 @@ export const ADMIN_PASSWORD = "admin123";
 // Collection references
 export const USERS_COLLECTION = 'users';
 export const EVENT_SETTINGS_COLLECTION = 'eventSettings';
-export const EVENTS_HISTORY_COLLECTION = 'eventsHistory'; // New: Event history
+export const EVENTS_HISTORY_COLLECTION = 'eventsHistory';
 
-// ✅ NEW: Advanced Event Management Functions
+// ===== EVENT MANAGEMENT FUNCTIONS =====
 
 // Get current active event
 export const getCurrentEvent = async () => {
@@ -91,13 +92,14 @@ export const createNewEvent = async (eventData) => {
   }
 };
 
-// Start event manually
+// ✅ ENHANCED: Manual start event (with override tracking)
 export const startEvent = async () => {
   try {
     const settingsRef = doc(db, EVENT_SETTINGS_COLLECTION, 'current');
     await updateDoc(settingsRef, {
       eventActive: true,
       status: 'active',
+      manuallyStartedAt: serverTimestamp(), // ✅ Track manual override
       startedAt: serverTimestamp()
     });
     
@@ -108,13 +110,14 @@ export const startEvent = async () => {
   }
 };
 
-// Stop event manually
+// ✅ ENHANCED: Manual stop event (with override tracking)
 export const stopEvent = async () => {
   try {
     const settingsRef = doc(db, EVENT_SETTINGS_COLLECTION, 'current');
     await updateDoc(settingsRef, {
       eventActive: false,
       status: 'paused',
+      manuallyPausedAt: serverTimestamp(), // ✅ Track manual override
       pausedAt: serverTimestamp()
     });
     
@@ -125,7 +128,7 @@ export const stopEvent = async () => {
   }
 };
 
-// Complete event (final stop)
+// ✅ ENHANCED: Manual complete event (with override tracking)
 export const completeEvent = async () => {
   try {
     // Get current stats inline
@@ -143,6 +146,7 @@ export const completeEvent = async () => {
     await updateDoc(settingsRef, {
       eventActive: false,
       status: 'completed',
+      manuallyCompletedAt: serverTimestamp(), // ✅ Track manual override
       completedAt: serverTimestamp(),
       finalStats: {
         totalRounds: globalCount,
@@ -158,7 +162,30 @@ export const completeEvent = async () => {
   }
 };
 
-// Archive current event and clear participants
+// ✅ NEW: Auto-start function (silently updates event status in background)
+const autoStartEvent = async () => {
+  try {
+    const settingsRef = doc(db, EVENT_SETTINGS_COLLECTION, 'current');
+    const docSnap = await getDoc(settingsRef);
+    
+    if (docSnap.exists()) {
+      const eventData = docSnap.data();
+      // Only auto-start if not manually controlled and status is 'created'
+      if (!eventData.manuallyStartedAt && !eventData.manuallyPausedAt && eventData.status === 'created') {
+        await updateDoc(settingsRef, {
+          eventActive: true,
+          status: 'active',
+          autoStartedAt: serverTimestamp() // Track automatic start
+        });
+        console.log('🎯 Event auto-started based on schedule');
+      }
+    }
+  } catch (error) {
+    console.error('Error auto-starting event:', error);
+  }
+};
+
+// Archive current event and reset participants
 export const archiveCurrentEvent = async () => {
   try {
     const currentEventResult = await getCurrentEvent();
@@ -166,7 +193,7 @@ export const archiveCurrentEvent = async () => {
     if (currentEventResult.success) {
       const currentEvent = currentEventResult.event;
       
-      // Get current participants and global count inline
+      // Get current participants and global count
       const querySnapshot = await getDocs(collection(db, USERS_COLLECTION));
       let globalCount = 0;
       const participants = [];
@@ -177,7 +204,7 @@ export const archiveCurrentEvent = async () => {
         participants.push({ id: doc.id, ...data });
       });
       
-      // Create archive entry
+      // Create archive entry with full participant data
       const archiveData = {
         ...currentEvent,
         archivedAt: serverTimestamp(),
@@ -185,22 +212,35 @@ export const archiveCurrentEvent = async () => {
           totalRounds: globalCount,
           totalParticipants: participants.length,
           activeParticipants: participants.filter(p => p.chantCount > 0).length,
-          topPerformers: participants.slice(0, 10) // Top 10
+          topPerformers: participants
+            .filter(p => p.chantCount > 0)
+            .sort((a, b) => b.chantCount - a.chantCount)
+            .slice(0, 10) // Top 10 performers
         },
-        participants: participants // Store all participant data
+        participants: participants // Store all participant data for history
       };
       
       // Save to history
       await addDoc(collection(db, EVENTS_HISTORY_COLLECTION), archiveData);
       
-      // Clear all participants inline
-      const deletePromises = [];
-      querySnapshot.forEach((doc) => {
-        deletePromises.push(deleteDoc(doc.ref));
+      // ✅ RESET chant counts instead of deleting users
+      const resetPromises = [];
+      querySnapshot.forEach((docSnap) => {
+        const userRef = doc(db, USERS_COLLECTION, docSnap.id);
+        resetPromises.push(
+          updateDoc(userRef, {
+            chantCount: 0, // Reset to 0
+            lastEventParticipated: currentEvent.eventName || 'Unknown Event',
+            lastEventDate: serverTimestamp(),
+            totalEventsParticipated: increment(1), // Track participation history
+            archivedAt: serverTimestamp()
+          })
+        );
       });
-      await Promise.all(deletePromises);
       
-      console.log('Event archived successfully');
+      await Promise.all(resetPromises);
+      
+      console.log(`✅ Event archived successfully. ${participants.length} participants preserved with reset counts.`);
     }
     
     return { success: true };
@@ -210,46 +250,13 @@ export const archiveCurrentEvent = async () => {
   }
 };
 
-// Helper: Get all participants
-const getAllParticipants = async () => {
-  try {
-    const q = query(collection(db, USERS_COLLECTION), orderBy("chantCount", "desc"));
-    const querySnapshot = await getDocs(q);
-    const participants = [];
-    querySnapshot.forEach((doc) => {
-      participants.push({ id: doc.id, ...doc.data() });
-    });
-    return participants;
-  } catch (error) {
-    console.error('Error getting participants:', error);
-    return [];
-  }
-};
-
-// Helper: Clear all participants
-const clearAllParticipants = async () => {
-  try {
-    const querySnapshot = await getDocs(collection(db, USERS_COLLECTION));
-    const deletePromises = [];
-    
-    querySnapshot.forEach((doc) => {
-      deletePromises.push(deleteDoc(doc.ref));
-    });
-    
-    await Promise.all(deletePromises);
-    console.log('All participants cleared');
-  } catch (error) {
-    console.error('Error clearing participants:', error);
-  }
-};
-
-// Get events history
-export const getEventsHistory = async (limit = 10) => {
+// ✅ FIXED: Get events history function
+export const getEventsHistory = async (limitCount = 10) => {
   try {
     const q = query(
       collection(db, EVENTS_HISTORY_COLLECTION), 
       orderBy("archivedAt", "desc"),
-      ...(limit ? [limit] : [])
+      limit(limitCount) // ✅ Fixed: Use limit() function, not spread array
     );
     const querySnapshot = await getDocs(q);
     
@@ -265,7 +272,8 @@ export const getEventsHistory = async (limit = 10) => {
   }
 };
 
-// ✅ NEW: Dynamic event settings functions
+
+// Dynamic event settings functions
 export const updateEventSettings = async (settings) => {
   try {
     const settingsRef = doc(db, EVENT_SETTINGS_COLLECTION, 'current');
@@ -277,46 +285,81 @@ export const updateEventSettings = async (settings) => {
   }
 };
 
-// Enhanced event status function
+// ✅ FIXED: Proper event status logic - time-based logic first for new events
 export const getEventStatus = (eventSettings) => {
   // If no event settings, return inactive
   if (!eventSettings) {
     return 'NO_EVENT';
   }
   
-  // Manual control overrides everything
-  if (eventSettings.eventActive === false) {
-    return eventSettings.status === 'completed' ? 'COMPLETED' : 'STOPPED';
+  // ✅ If admin manually completed the event - always override
+  if (eventSettings.status === 'completed') {
+    return 'COMPLETED';
   }
   
-  if (eventSettings.eventActive === true) {
-    return 'ACTIVE';
-  }
-  
-  // In development mode, show based on status
-  if (DEV_MODE) {
-    if (eventSettings.status === 'created') return 'BEFORE_START';
-    if (eventSettings.status === 'active') return 'ACTIVE';
-    if (eventSettings.status === 'completed') return 'COMPLETED';
-    return 'BEFORE_START';
-  }
-  
-  // Time-based logic for production
+  // ✅ Get current time for time-based logic
   const now = new Date();
   const currentHour = now.getHours();
+  const currentMinute = now.getMinutes();
+  const currentTime = currentHour * 60 + currentMinute; // Convert to minutes
+  
   const startTime = eventSettings?.startTime || 6;
   const endTime = eventSettings?.endTime || 24;
+  const startTimeMinutes = startTime * 60;
+  const endTimeMinutes = endTime * 60;
   
-  if (currentHour < startTime) {
-    return 'BEFORE_START';
-  } else if (currentHour >= endTime) {
-    return 'ENDED';
-  } else {
+  // ✅ PRIORITY 1: Time-based logic for newly created events (no manual overrides yet)
+  if (eventSettings.status === 'created' && !eventSettings.manuallyStartedAt && !eventSettings.manuallyPausedAt) {
+    if (currentTime < startTimeMinutes) {
+      return 'BEFORE_START'; // ✅ Show countdown timer
+    } else if (currentTime >= startTimeMinutes && currentTime < endTimeMinutes) {
+      // Auto-start the event
+      autoStartEvent();
+      return 'ACTIVE';
+    } else {
+      return 'ENDED';
+    }
+  }
+  
+  // ✅ PRIORITY 2: Manual admin overrides (for events that have been manually controlled)
+  if (eventSettings.manuallyStartedAt && eventSettings.eventActive === true) {
     return 'ACTIVE';
   }
+  
+  if (eventSettings.manuallyPausedAt && eventSettings.eventActive === false) {
+    return 'STOPPED';
+  }
+  
+  // ✅ PRIORITY 3: Automatic time-based logic (for events without manual overrides)
+  if (currentTime < startTimeMinutes) {
+    return 'BEFORE_START';
+  } else if (currentTime >= startTimeMinutes && currentTime < endTimeMinutes) {
+    // During event hours - should be active unless manually paused
+    if (eventSettings.eventActive === false && eventSettings.status === 'paused') {
+      return 'STOPPED';
+    }
+    return 'ACTIVE';
+  } else if (currentTime >= endTimeMinutes) {
+    return 'ENDED';
+  }
+  
+  // ✅ Development mode override
+  if (DEV_MODE) {
+    // In dev mode, prioritize showing countdown for new events
+    if (eventSettings.status === 'created') {
+      return 'BEFORE_START';
+    }
+    if (eventSettings.eventActive === false && eventSettings.status === 'paused') {
+      return 'STOPPED';
+    }
+    return 'ACTIVE';
+  }
+  
+  return 'BEFORE_START';
 };
 
-// ✅ UPDATED: Get time until start using dynamic settings
+
+// Get time until start using dynamic settings
 export const getTimeUntilStart = (eventSettings) => {
   const now = new Date();
   const today = new Date(now);
@@ -331,7 +374,8 @@ export const getTimeUntilStart = (eventSettings) => {
   return today.getTime() - now.getTime();
 };
 
-// Rest of your existing functions remain the same...
+// ===== USER MANAGEMENT FUNCTIONS =====
+
 export const createUser = async (userData) => {
   try {
     const docRef = await addDoc(collection(db, USERS_COLLECTION), {
@@ -454,7 +498,8 @@ export const subscribeToGlobalCount = (callback) => {
   });
 };
 
-// Admin authentication
+// ===== ADMIN AUTHENTICATION =====
+
 export const authenticateAdmin = (phone, password) => {
   const cleanPhone = phone.replace(/\D/g, '');
   return cleanPhone === ADMIN_PHONE && password === ADMIN_PASSWORD;
