@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { getTimeUntilStart } from '../services/firebase';
-import { getTimeFromNow } from '../utils/validation';
 
-const CountdownTimer = () => {
+const CountdownTimer = ({ eventSettings }) => {
   const [timeLeft, setTimeLeft] = useState(0);
   const [isEventStarted, setIsEventStarted] = useState(false);
 
   useEffect(() => {
     const updateTimer = () => {
-      const millisUntilStart = getTimeUntilStart();
+       const millisUntilStart = getTimeUntilStart(eventSettings); // ← Pass eventSettings
       
       if (millisUntilStart <= 0) {
         setIsEventStarted(true);
@@ -29,7 +28,7 @@ const CountdownTimer = () => {
     const interval = setInterval(updateTimer, 1000);
     
     return () => clearInterval(interval);
-  }, []);
+  }, [eventSettings]);
 
   if (isEventStarted) {
     return (

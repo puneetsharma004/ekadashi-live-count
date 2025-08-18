@@ -12,12 +12,14 @@ import {
   onSnapshot,
   orderBy,
   increment,
-  setDoc,    // Add this import
-  getDoc     // Add this import
+  setDoc,
+  getDoc,
+  deleteDoc,
+  serverTimestamp,
+  Timestamp
 } from 'firebase/firestore';
 
 // TODO: Replace with your Firebase config
-// Get this from: Firebase Console → Project Settings → General → Your apps
 const firebaseConfig = {
   apiKey: "AIzaSyDRthSJrs6gJlZpmnU03kS8ZPynqfYILcc",
   authDomain: "ekadashi-live-count.firebaseapp.com",
@@ -32,40 +34,242 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 
-
 // Development mode - set to true for testing
-export const DEV_MODE = true; // Change to false for production
+export const DEV_MODE = true;
 
 // Admin credentials - change these!
-export const ADMIN_PHONE = "1234567890"; // Admin phone number
-export const ADMIN_PASSWORD = "admin123"; // Simple admin password
+export const ADMIN_PHONE = "1234567890";
+export const ADMIN_PASSWORD = "admin123";
 
-// Dynamic event settings
-export let DYNAMIC_EVENT_START_TIME = 6; // 6:00 AM
-export let DYNAMIC_EVENT_END_TIME = 24;  // Midnight
-export let DYNAMIC_GLOBAL_GOAL = 666;
+// Collection references
+export const USERS_COLLECTION = 'users';
+export const EVENT_SETTINGS_COLLECTION = 'eventSettings';
+export const EVENTS_HISTORY_COLLECTION = 'eventsHistory'; // New: Event history
 
-// Admin functions to update settings
-export const updateEventSettings = async (settings) => {
+// ✅ NEW: Advanced Event Management Functions
+
+// Get current active event
+export const getCurrentEvent = async () => {
   try {
-    const settingsRef = doc(db, 'eventSettings', 'current');
+    const settingsRef = doc(db, EVENT_SETTINGS_COLLECTION, 'current');
+    const docSnap = await getDoc(settingsRef);
     
-    // Check if document exists first
-    const docSnapshot = await getDoc(settingsRef);
+    if (docSnap.exists()) {
+      return { success: true, event: docSnap.data() };
+    }
+    return { success: false, error: 'No active event found' };
+  } catch (error) {
+    console.error('Error getting current event:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Create new event
+export const createNewEvent = async (eventData) => {
+  try {
+    // Archive current event first
+    await archiveCurrentEvent();
     
-    if (docSnapshot.exists()) {
-      // Document exists - update it
-      await updateDoc(settingsRef, settings);
-    } else {
-      // Document doesn't exist - create it
-      await setDoc(settingsRef, settings);
+    // Create new event
+    const newEventData = {
+      ...eventData,
+      eventActive: false, // Start as inactive
+      createdAt: serverTimestamp(),
+      createdBy: 'admin',
+      status: 'created', // created, active, paused, completed, archived
+      totalParticipants: 0,
+      totalRounds: 0
+    };
+    
+    const settingsRef = doc(db, EVENT_SETTINGS_COLLECTION, 'current');
+    await setDoc(settingsRef, newEventData);
+    
+    return { success: true, eventId: 'current' };
+  } catch (error) {
+    console.error('Error creating new event:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Start event manually
+export const startEvent = async () => {
+  try {
+    const settingsRef = doc(db, EVENT_SETTINGS_COLLECTION, 'current');
+    await updateDoc(settingsRef, {
+      eventActive: true,
+      status: 'active',
+      startedAt: serverTimestamp()
+    });
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Error starting event:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Stop event manually
+export const stopEvent = async () => {
+  try {
+    const settingsRef = doc(db, EVENT_SETTINGS_COLLECTION, 'current');
+    await updateDoc(settingsRef, {
+      eventActive: false,
+      status: 'paused',
+      pausedAt: serverTimestamp()
+    });
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Error stopping event:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Complete event (final stop)
+export const completeEvent = async () => {
+  try {
+    // Get current stats inline
+    const querySnapshot = await getDocs(collection(db, USERS_COLLECTION));
+    let globalCount = 0;
+    const participants = [];
+    
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      globalCount += data.chantCount || 0;
+      participants.push({ id: doc.id, ...data });
+    });
+    
+    const settingsRef = doc(db, EVENT_SETTINGS_COLLECTION, 'current');
+    await updateDoc(settingsRef, {
+      eventActive: false,
+      status: 'completed',
+      completedAt: serverTimestamp(),
+      finalStats: {
+        totalRounds: globalCount,
+        totalParticipants: participants.length,
+        activeParticipants: participants.filter(p => p.chantCount > 0).length
+      }
+    });
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Error completing event:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Archive current event and clear participants
+export const archiveCurrentEvent = async () => {
+  try {
+    const currentEventResult = await getCurrentEvent();
+    
+    if (currentEventResult.success) {
+      const currentEvent = currentEventResult.event;
+      
+      // Get current participants and global count inline
+      const querySnapshot = await getDocs(collection(db, USERS_COLLECTION));
+      let globalCount = 0;
+      const participants = [];
+      
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        globalCount += data.chantCount || 0;
+        participants.push({ id: doc.id, ...data });
+      });
+      
+      // Create archive entry
+      const archiveData = {
+        ...currentEvent,
+        archivedAt: serverTimestamp(),
+        finalStats: {
+          totalRounds: globalCount,
+          totalParticipants: participants.length,
+          activeParticipants: participants.filter(p => p.chantCount > 0).length,
+          topPerformers: participants.slice(0, 10) // Top 10
+        },
+        participants: participants // Store all participant data
+      };
+      
+      // Save to history
+      await addDoc(collection(db, EVENTS_HISTORY_COLLECTION), archiveData);
+      
+      // Clear all participants inline
+      const deletePromises = [];
+      querySnapshot.forEach((doc) => {
+        deletePromises.push(deleteDoc(doc.ref));
+      });
+      await Promise.all(deletePromises);
+      
+      console.log('Event archived successfully');
     }
     
-    // Update local variables
-    DYNAMIC_EVENT_START_TIME = settings.startTime || DYNAMIC_EVENT_START_TIME;
-    DYNAMIC_EVENT_END_TIME = settings.endTime || DYNAMIC_EVENT_END_TIME;
-    DYNAMIC_GLOBAL_GOAL = settings.globalGoal || DYNAMIC_GLOBAL_GOAL;
+    return { success: true };
+  } catch (error) {
+    console.error('Error archiving event:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Helper: Get all participants
+const getAllParticipants = async () => {
+  try {
+    const q = query(collection(db, USERS_COLLECTION), orderBy("chantCount", "desc"));
+    const querySnapshot = await getDocs(q);
+    const participants = [];
+    querySnapshot.forEach((doc) => {
+      participants.push({ id: doc.id, ...doc.data() });
+    });
+    return participants;
+  } catch (error) {
+    console.error('Error getting participants:', error);
+    return [];
+  }
+};
+
+// Helper: Clear all participants
+const clearAllParticipants = async () => {
+  try {
+    const querySnapshot = await getDocs(collection(db, USERS_COLLECTION));
+    const deletePromises = [];
     
+    querySnapshot.forEach((doc) => {
+      deletePromises.push(deleteDoc(doc.ref));
+    });
+    
+    await Promise.all(deletePromises);
+    console.log('All participants cleared');
+  } catch (error) {
+    console.error('Error clearing participants:', error);
+  }
+};
+
+// Get events history
+export const getEventsHistory = async (limit = 10) => {
+  try {
+    const q = query(
+      collection(db, EVENTS_HISTORY_COLLECTION), 
+      orderBy("archivedAt", "desc"),
+      ...(limit ? [limit] : [])
+    );
+    const querySnapshot = await getDocs(q);
+    
+    const events = [];
+    querySnapshot.forEach((doc) => {
+      events.push({ id: doc.id, ...doc.data() });
+    });
+    
+    return { success: true, events };
+  } catch (error) {
+    console.error('Error getting events history:', error);
+    return { success: false, error: error.message, events: [] };
+  }
+};
+
+// ✅ NEW: Dynamic event settings functions
+export const updateEventSettings = async (settings) => {
+  try {
+    const settingsRef = doc(db, EVENT_SETTINGS_COLLECTION, 'current');
+    await setDoc(settingsRef, settings, { merge: true });
     return { success: true };
   } catch (error) {
     console.error('Error updating settings:', error);
@@ -73,26 +277,61 @@ export const updateEventSettings = async (settings) => {
   }
 };
 
-
-
-// Admin authentication
-export const authenticateAdmin = (phone, password) => {
-  const cleanPhone = phone.replace(/\D/g, '');
-  return cleanPhone === ADMIN_PHONE && password === ADMIN_PASSWORD;
+// Enhanced event status function
+export const getEventStatus = (eventSettings) => {
+  // If no event settings, return inactive
+  if (!eventSettings) {
+    return 'NO_EVENT';
+  }
+  
+  // Manual control overrides everything
+  if (eventSettings.eventActive === false) {
+    return eventSettings.status === 'completed' ? 'COMPLETED' : 'STOPPED';
+  }
+  
+  if (eventSettings.eventActive === true) {
+    return 'ACTIVE';
+  }
+  
+  // In development mode, show based on status
+  if (DEV_MODE) {
+    if (eventSettings.status === 'created') return 'BEFORE_START';
+    if (eventSettings.status === 'active') return 'ACTIVE';
+    if (eventSettings.status === 'completed') return 'COMPLETED';
+    return 'BEFORE_START';
+  }
+  
+  // Time-based logic for production
+  const now = new Date();
+  const currentHour = now.getHours();
+  const startTime = eventSettings?.startTime || 6;
+  const endTime = eventSettings?.endTime || 24;
+  
+  if (currentHour < startTime) {
+    return 'BEFORE_START';
+  } else if (currentHour >= endTime) {
+    return 'ENDED';
+  } else {
+    return 'ACTIVE';
+  }
 };
 
-// Check if user is admin
-export const isAdmin = (phone) => {
-  const cleanPhone = phone.replace(/\D/g, '');
-  return cleanPhone === ADMIN_PHONE;
+// ✅ UPDATED: Get time until start using dynamic settings
+export const getTimeUntilStart = (eventSettings) => {
+  const now = new Date();
+  const today = new Date(now);
+  const startTime = eventSettings?.startTime || 6;
+  
+  today.setHours(startTime, 0, 0, 0);
+  
+  if (now > today) {
+    today.setDate(today.getDate() + 1);
+  }
+  
+  return today.getTime() - now.getTime();
 };
 
-
-// Collection references
-export const USERS_COLLECTION = 'users';
-export const GLOBAL_STATS_COLLECTION = 'globalStats';
-
-// User management functions
+// Rest of your existing functions remain the same...
 export const createUser = async (userData) => {
   try {
     const docRef = await addDoc(collection(db, USERS_COLLECTION), {
@@ -155,7 +394,6 @@ export const updateUserChantCount = async (userId, newRounds) => {
   }
 };
 
-// Real-time listeners
 export const subscribeToLeaderboard = (callback) => {
   const q = query(
     collection(db, USERS_COLLECTION), 
@@ -181,39 +419,13 @@ export const subscribeToGlobalCount = (callback) => {
   });
 };
 
-// Event timing functions
-export const EVENT_START_TIME = 6; // 6:00 AM
-export const EVENT_END_TIME = 24;  // Midnight (24:00)
-export const GLOBAL_GOAL = 666;
-
-// Updated event status function
-export const getEventStatus = () => {
-  // In development mode, always return ACTIVE for testing
-  if (DEV_MODE) {
-    return 'ACTIVE';
-  }
-  
-  const now = new Date();
-  const currentHour = now.getHours();
-  
-  if (currentHour < DYNAMIC_EVENT_START_TIME) {
-    return 'BEFORE_START';
-  } else if (currentHour >= DYNAMIC_EVENT_END_TIME) {
-    return 'ENDED';
-  } else {
-    return 'ACTIVE';
-  }
+// Admin authentication
+export const authenticateAdmin = (phone, password) => {
+  const cleanPhone = phone.replace(/\D/g, '');
+  return cleanPhone === ADMIN_PHONE && password === ADMIN_PASSWORD;
 };
 
-export const getTimeUntilStart = () => {
-  const now = new Date();
-  const today = new Date(now);
-  today.setHours(EVENT_START_TIME, 0, 0, 0);
-  
-  if (now > today) {
-    // Event started today or tomorrow
-    today.setDate(today.getDate() + 1);
-  }
-  
-  return today.getTime() - now.getTime();
+export const isAdmin = (phone) => {
+  const cleanPhone = phone.replace(/\D/g, '');
+  return cleanPhone === ADMIN_PHONE;
 };
