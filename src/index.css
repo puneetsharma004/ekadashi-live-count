@@ -1,0 +1,180 @@
+@import "tailwindcss";
+
+/* Custom base styles for spiritual theme */
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  line-height: 1.6;
+  color: #F3F4F6;
+  background: linear-gradient(135deg, #1A1A1A 0%, #0F0F0F 100%);
+  min-height: 100vh;
+}
+
+/* Smooth scroll for mobile */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Saffron Color Utilities */
+.text-saffron-50 { color: #FFF7ED; }
+.text-saffron-100 { color: #FFEDD5; }
+.text-saffron-200 { color: #FED7AA; }
+.text-saffron-300 { color: #FDBA74; }
+.text-saffron-400 { color: #FB923C; }
+.text-saffron-500 { color: #F97316; }
+.text-saffron-600 { color: #EA580C; }
+.text-saffron-700 { color: #C2410C; }
+.text-saffron-800 { color: #9A3412; }
+.text-saffron-900 { color: #7C2D12; }
+
+.bg-saffron-50 { background-color: #FFF7ED; }
+.bg-saffron-100 { background-color: #FFEDD5; }
+.bg-saffron-200 { background-color: #FED7AA; }
+.bg-saffron-300 { background-color: #FDBA74; }
+.bg-saffron-400 { background-color: #FB923C; }
+.bg-saffron-500 { background-color: #F97316; }
+.bg-saffron-600 { background-color: #EA580C; }
+.bg-saffron-700 { background-color: #C2410C; }
+.bg-saffron-800 { background-color: #9A3412; }
+.bg-saffron-900 { background-color: #7C2D12; }
+
+.border-saffron-50 { border-color: #FFF7ED; }
+.border-saffron-100 { border-color: #FFEDD5; }
+.border-saffron-200 { border-color: #FED7AA; }
+.border-saffron-300 { border-color: #FDBA74; }
+.border-saffron-400 { border-color: #FB923C; }
+.border-saffron-500 { border-color: #F97316; }
+.border-saffron-600 { border-color: #EA580C; }
+.border-saffron-700 { border-color: #C2410C; }
+.border-saffron-800 { border-color: #9A3412; }
+.border-saffron-900 { border-color: #7C2D12; }
+
+/* Devotional Colors */
+.text-devotional-dark { color: #1A1A1A; }
+.text-devotional-darker { color: #0F0F0F; }
+.text-devotional-gold { color: #FFD700; }
+
+.bg-devotional-dark { background-color: #1A1A1A; }
+.bg-devotional-darker { background-color: #0F0F0F; }
+.bg-devotional-gold { background-color: #FFD700; }
+
+.border-devotional-dark { border-color: #1A1A1A; }
+.border-devotional-darker { border-color: #0F0F0F; }
+.border-devotional-gold { border-color: #FFD700; }
+
+/* Custom Animations */
+.animate-pulse-slow {
+  animation: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-in-out;
+}
+
+@keyframes pulse-slow {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes fadeIn {
+  0% { 
+    opacity: 0; 
+    transform: translateY(10px); 
+  }
+  100% { 
+    opacity: 1; 
+    transform: translateY(0); 
+  }
+}
+
+/* Reusable spiritual button */
+.btn-saffron {
+  @apply bg-saffron-500 hover:bg-saffron-600 text-white font-semibold py-3 px-6 rounded-lg shadow-lg transition-all duration-200 active:scale-95;
+}
+
+.btn-secondary {
+  @apply bg-gray-700 hover:bg-gray-600 text-gray-200 font-medium py-2 px-4 rounded-md transition-colors duration-200;
+}
+
+/* Card container style */
+.card-devotional {
+  @apply bg-gray-800/80 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6 shadow-xl;
+}
+
+/* Input field styling */
+.input-devotional {
+  @apply w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-saffron-500 focus:ring-2 focus:ring-saffron-500/20 transition-all duration-200;
+}
+
+/* Progress bar styling */
+.progress-bar {
+  @apply w-full bg-gray-700 rounded-full h-3 overflow-hidden;
+}
+
+.progress-fill {
+  @apply h-full bg-gradient-to-r from-saffron-400 to-devotional-gold transition-all duration-500 ease-out;
+}
+
+/* Text gradient for headings */
+.text-gradient-saffron {
+  @apply bg-gradient-to-r from-saffron-400 to-devotional-gold bg-clip-text text-transparent;
+}
+
+/* Glowing effect for counters */
+.glow-saffron {
+  @apply drop-shadow-lg;
+  filter: drop-shadow(0 0 10px rgba(249, 115, 22, 0.5));
+}
+
+/* Loading spinner for Firebase operations */
+.spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid transparent;
+  border-top: 2px solid currentColor;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Mobile optimizations */
+@media (max-width: 640px) {
+  body {
+    font-size: 14px;
+  }
+  
+  .card-devotional {
+    @apply p-4 mx-2;
+  }
+}
+
+/* Additional utilities for hover states */
+.hover\:text-saffron-500:hover { color: #F97316; }
+.hover\:bg-saffron-500:hover { background-color: #F97316; }
+.hover\:border-saffron-500:hover { border-color: #F97316; }
+
+/* Focus states */
+.focus\:text-saffron-500:focus { color: #F97316; }
+.focus\:bg-saffron-500:focus { background-color: #F97316; }
+.focus\:border-saffron-500:focus { border-color: #F97316; }
+
+/* Ring utilities for focus states */
+.focus\:ring-saffron-500:focus {
+  --tw-ring-color: rgb(249 115 22 / 0.5);
+}
+
+/* Gradient backgrounds */
+.bg-gradient-saffron {
+  background: linear-gradient(135deg, #F97316 0%, #FFD700 100%);
+}
+
+.bg-gradient-devotional {
+  background: linear-gradient(135deg, #1A1A1A 0%, #0F0F0F 100%);
+}
