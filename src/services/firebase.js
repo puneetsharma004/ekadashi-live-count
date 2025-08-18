@@ -11,7 +11,9 @@ import {
   doc, 
   onSnapshot,
   orderBy,
-  increment 
+  increment,
+  setDoc,    // Add this import
+  getDoc     // Add this import
 } from 'firebase/firestore';
 
 // TODO: Replace with your Firebase config
@@ -47,7 +49,17 @@ export let DYNAMIC_GLOBAL_GOAL = 666;
 export const updateEventSettings = async (settings) => {
   try {
     const settingsRef = doc(db, 'eventSettings', 'current');
-    await updateDoc(settingsRef, settings);
+    
+    // Check if document exists first
+    const docSnapshot = await getDoc(settingsRef);
+    
+    if (docSnapshot.exists()) {
+      // Document exists - update it
+      await updateDoc(settingsRef, settings);
+    } else {
+      // Document doesn't exist - create it
+      await setDoc(settingsRef, settings);
+    }
     
     // Update local variables
     DYNAMIC_EVENT_START_TIME = settings.startTime || DYNAMIC_EVENT_START_TIME;

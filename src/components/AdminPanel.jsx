@@ -7,7 +7,8 @@ import {
   DYNAMIC_GLOBAL_GOAL,
   DYNAMIC_EVENT_START_TIME,
   DYNAMIC_EVENT_END_TIME,
-  DEV_MODE
+  DEV_MODE,
+  ADMIN_PHONE
 } from '../services/firebase';
 
 const AdminPanel = () => {
