@@ -1,8 +1,10 @@
 // Handles auth state, user session
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { getUserByPhone, checkPhoneExists, createUser } from '../services/firebase.js';
+import { getUserByPhone, checkPhoneExists, createUser, isAdmin, authenticateAdmin } from '../services/firebase.js';
 
 const AuthContext = createContext();
+
+
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
@@ -16,6 +18,8 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  // Add these properties to your AuthContext
+  const [isAdminUser, setIsAdminUser] = useState(false);
 
   // Check for existing session on app load
   useEffect(() => {
@@ -54,6 +58,13 @@ export const AuthProvider = ({ children }) => {
         throw new Error('Phone number already registered');
       }
 
+      if (adminCheck) {
+      const adminPassword = prompt('Enter admin password:');
+      if (!authenticateAdmin(cleanPhone, adminPassword)) {
+        throw new Error('Invalid admin credentials');
+      }
+    }
+
       // Create new user
       const result = await createUser({
         fullName: fullName.trim(),
@@ -65,12 +76,14 @@ export const AuthProvider = ({ children }) => {
           id: result.id,
           fullName: fullName.trim(),
           phone: cleanPhone,
-          chantCount: 0
+          chantCount: 0,
+          isAdmin: adminCheck  // Add admin flag
         };
         
         // Save to localStorage and state
         localStorage.setItem('ekadashi-user', JSON.stringify(newUser));
         setUser(newUser);
+        setIsAdminUser(adminCheck);
         
         return { success: true };
       } else {
@@ -138,8 +151,11 @@ export const AuthProvider = ({ children }) => {
     logout,
     updateUserChantCount,
     clearError,
-    isAuthenticated: !!user
+    isAuthenticated: !!user,
+    isAdminUser  // Add this
   };
+
+  
 
   return (
     <AuthContext.Provider value={value}>

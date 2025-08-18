@@ -3,12 +3,17 @@ import { useAuth } from '../context/AuthContext';
 import ChantForm from '../components/ChantForm';
 import ProgressBar from '../components/ProgressBar';
 import Leaderboard from '../components/Leaderboard';
-import { subscribeToGlobalCount, GLOBAL_GOAL } from '../services/firebase.js';
+import { subscribeToGlobalCount, GLOBAL_GOAL, DYNAMIC_GLOBAL_GOAL, isAdmin } from '../services/firebase.js';
+import AdminPanel from '../components/AdminPanel.jsx';
 
 const Home = () => {
   const { user } = useAuth();
   const [globalCount, setGlobalCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [showAdmin, setShowAdmin] = useState(false);
+
+    // Check if current user is admin
+  const userIsAdmin = user && isAdmin(user.phone);
 
   useEffect(() => {
     // Subscribe to real-time global count updates
@@ -20,7 +25,24 @@ const Home = () => {
     return () => unsubscribe();
   }, []);
 
-  const progressPercentage = Math.min((globalCount / GLOBAL_GOAL) * 100, 100);
+  const progressPercentage = Math.min((globalCount / DYNAMIC_GLOBAL_GOAL) * 100, 100);
+
+  // If admin and admin panel is active, show admin panel
+  if (userIsAdmin && showAdmin) {
+    return (
+      <div className="space-y-6">
+        <div className="text-center">
+          <button
+            onClick={() => setShowAdmin(false)}
+            className="btn-secondary mb-4"
+          >
+            ← Back to User View
+          </button>
+        </div>
+        <AdminPanel />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -32,6 +54,17 @@ const Home = () => {
         <p className="text-gray-300 text-lg">
           Welcome to the Ekadashi Chanting Event
         </p>
+        {/* Admin Switch Button */}
+        {userIsAdmin && (
+          <div className="mt-4">
+            <button
+              onClick={() => setShowAdmin(true)}
+              className="btn-saffron text-sm"
+            >
+              🔧 Admin Panel
+            </button>
+          </div>
+        )}
       </div>
 
       {/* User Stats */}
@@ -48,7 +81,7 @@ const Home = () => {
 
         <div className="card-devotional text-center">
           <h3 className="text-lg font-semibold text-gray-300 mb-2">
-            Global Progress
+            Total Progress
           </h3>
           <div className="text-4xl font-bold text-devotional-gold glow-saffron">
             {loading ? (
@@ -58,7 +91,7 @@ const Home = () => {
             )}
           </div>
           <p className="text-gray-400 text-sm mt-2">
-            out of {GLOBAL_GOAL} rounds
+            out of {DYNAMIC_GLOBAL_GOAL} rounds
           </p>
         </div>
       </div>
@@ -70,7 +103,7 @@ const Home = () => {
         </h3>
         <ProgressBar 
           current={globalCount} 
-          total={GLOBAL_GOAL}
+          total={DYNAMIC_GLOBAL_GOAL}
           loading={loading}
         />
         <div className="text-center mt-4">

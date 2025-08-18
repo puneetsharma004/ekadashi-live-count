@@ -7,6 +7,7 @@ import Home from './pages/Home';
 import { getEventStatus } from './services/firebase';
 
 
+
 // Main App Content (inside AuthProvider)
 const AppContent = () => {
   const { isAuthenticated, loading } = useAuth();

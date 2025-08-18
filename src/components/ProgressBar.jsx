@@ -10,6 +10,7 @@ const ProgressBar = ({ current, total, loading }) => {
     if (percent >= 75) return 'from-green-400 to-saffron-400';
     if (percent >= 50) return 'from-saffron-400 to-saffron-500';
     if (percent >= 25) return 'from-orange-400 to-saffron-400';
+    if (percent >= 0) return 'from-orange-400 to-saffron-200';
     return 'from-red-400 to-orange-400';
   };
 
@@ -60,7 +61,7 @@ const ProgressBar = ({ current, total, loading }) => {
 
       {/* Milestone indicators */}
       <div className="flex justify-between text-xs text-gray-500 relative">
-        {[25, 50, 75, 100].map((milestone) => {
+        {[0, 25, 50, 75, 100].map((milestone) => {
           const milestoneValue = Math.floor((milestone / 100) * total);
           const isReached = current >= milestoneValue;
           

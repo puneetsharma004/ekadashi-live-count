@@ -30,6 +30,52 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 
+
+// Development mode - set to true for testing
+export const DEV_MODE = true; // Change to false for production
+
+// Admin credentials - change these!
+export const ADMIN_PHONE = "1234567890"; // Admin phone number
+export const ADMIN_PASSWORD = "admin123"; // Simple admin password
+
+// Dynamic event settings
+export let DYNAMIC_EVENT_START_TIME = 6; // 6:00 AM
+export let DYNAMIC_EVENT_END_TIME = 24;  // Midnight
+export let DYNAMIC_GLOBAL_GOAL = 666;
+
+// Admin functions to update settings
+export const updateEventSettings = async (settings) => {
+  try {
+    const settingsRef = doc(db, 'eventSettings', 'current');
+    await updateDoc(settingsRef, settings);
+    
+    // Update local variables
+    DYNAMIC_EVENT_START_TIME = settings.startTime || DYNAMIC_EVENT_START_TIME;
+    DYNAMIC_EVENT_END_TIME = settings.endTime || DYNAMIC_EVENT_END_TIME;
+    DYNAMIC_GLOBAL_GOAL = settings.globalGoal || DYNAMIC_GLOBAL_GOAL;
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Error updating settings:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+
+
+// Admin authentication
+export const authenticateAdmin = (phone, password) => {
+  const cleanPhone = phone.replace(/\D/g, '');
+  return cleanPhone === ADMIN_PHONE && password === ADMIN_PASSWORD;
+};
+
+// Check if user is admin
+export const isAdmin = (phone) => {
+  const cleanPhone = phone.replace(/\D/g, '');
+  return cleanPhone === ADMIN_PHONE;
+};
+
+
 // Collection references
 export const USERS_COLLECTION = 'users';
 export const GLOBAL_STATS_COLLECTION = 'globalStats';
@@ -128,13 +174,19 @@ export const EVENT_START_TIME = 6; // 6:00 AM
 export const EVENT_END_TIME = 24;  // Midnight (24:00)
 export const GLOBAL_GOAL = 666;
 
+// Updated event status function
 export const getEventStatus = () => {
+  // In development mode, always return ACTIVE for testing
+  if (DEV_MODE) {
+    return 'ACTIVE';
+  }
+  
   const now = new Date();
   const currentHour = now.getHours();
   
-  if (currentHour < EVENT_START_TIME) {
+  if (currentHour < DYNAMIC_EVENT_START_TIME) {
     return 'BEFORE_START';
-  } else if (currentHour >= EVENT_END_TIME) {
+  } else if (currentHour >= DYNAMIC_EVENT_END_TIME) {
     return 'ENDED';
   } else {
     return 'ACTIVE';
