@@ -383,10 +383,45 @@ export const getUserByPhone = async (phoneNumber) => {
 export const updateUserChantCount = async (userId, newRounds) => {
   try {
     const userRef = doc(db, USERS_COLLECTION, userId);
-    await updateDoc(userRef, {
-      chantCount: increment(newRounds),
-      lastUpdated: new Date()
-    });
+    
+    // ✅ Check if document exists first
+    const docSnap = await getDoc(userRef);
+    
+    if (docSnap.exists()) {
+      // Document exists - update it
+      await updateDoc(userRef, {
+        chantCount: increment(newRounds),
+        lastUpdated: new Date()
+      });
+    } else {
+      // ✅ Document doesn't exist - create it
+      console.log('User document not found, recreating...');
+      
+      // Try to get user info from localStorage
+      const savedUser = localStorage.getItem('ekadashi-user');
+      let userData = { fullName: 'Unknown User', phone: 'Unknown' };
+      
+      if (savedUser) {
+        try {
+          const parsedUser = JSON.parse(savedUser);
+          userData = {
+            fullName: parsedUser.fullName || 'Unknown User',
+            phone: parsedUser.phone || 'Unknown'
+          };
+        } catch (e) {
+          console.error('Error parsing saved user:', e);
+        }
+      }
+      
+      // Create new document with initial chant count
+      await setDoc(userRef, {
+        ...userData,
+        chantCount: newRounds,
+        createdAt: new Date(),
+        lastUpdated: new Date()
+      });
+    }
+    
     return { success: true };
   } catch (error) {
     console.error('Error updating chant count:', error);

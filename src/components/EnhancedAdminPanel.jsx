@@ -60,7 +60,7 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
 
   // Event control handlers
   const handleStartEvent = async () => {
-    if (window.confirm('Start the event now? All users will be able to submit chants.')) {
+    if (window.confirm('Start the event now? All users will be able to submit chanted rounds.')) {
       setLoading(true);
       const result = await startEvent();
       if (result.success) {
@@ -73,7 +73,7 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
   };
 
   const handleStopEvent = async () => {
-    if (window.confirm('Stop the event? Users will not be able to submit new chants.')) {
+    if (window.confirm('Stop the event? Users will not be able to submit new chanted rounds.')) {
       setLoading(true);
       const result = await stopEvent();
       if (result.success) {

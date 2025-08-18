@@ -110,7 +110,7 @@ const ChantForm = () => {
   return (
     <div>
       <h3 className="text-xl font-semibold text-gray-300 mb-4 text-center">
-        Submit Your Chant Rounds
+        Submit Your Chanted Rounds
       </h3>
       
       <form onSubmit={handleSubmit} className="space-y-4">
