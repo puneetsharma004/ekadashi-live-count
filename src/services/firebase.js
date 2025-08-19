@@ -20,6 +20,10 @@ import {
   limit
 } from 'firebase/firestore';
 
+// Add this import at the top with other imports
+import { USER_ROLES } from '../constants/roles';
+
+
 // Firebase config
 const firebaseConfig = {
   apiKey: "AIzaSyDRthSJrs6gJlZpmnU03kS8ZPynqfYILcc",
@@ -39,7 +43,7 @@ export const db = getFirestore(app);
 export const DEV_MODE = false;
 
 // Admin credentials - change these!
-export const ADMIN_PHONE = "7483916205";
+export const ADMIN_PHONE = "917483916205";
 export const ADMIN_PASSWORD = "t9X@7fQ1Lp";
 
 // Collection references
@@ -382,7 +386,8 @@ export const createUser = async (userData) => {
       ...userData,
       chantCount: 0,
       createdAt: new Date(),
-      lastUpdated: new Date()
+      lastUpdated: new Date(),
+      role: userData.role || USER_ROLES.FOLK_BOY
     });
     return { success: true, id: docRef.id };
   } catch (error) {
@@ -441,14 +446,17 @@ export const setUserTotalChantCount = async (userId, totalRounds) => {
     } else {
       // Document doesn't exist - create it
       const savedUser = localStorage.getItem('ekadashi-user');
-      let userData = { fullName: 'Unknown User', phone: 'Unknown' };
+      let userData = { fullName: 'Unknown User', phone: 'Unknown', role: USER_ROLES.FOLK_BOY }; 
+      // ✅ NEW: Default role
       
       if (savedUser) {
         try {
           const parsedUser = JSON.parse(savedUser);
           userData = {
             fullName: parsedUser.fullName || 'Unknown User',
-            phone: parsedUser.phone || 'Unknown'
+            phone: parsedUser.phone || 'Unknown',
+            role: parsedUser.role || USER_ROLES.FOLK_BOY
+            // ✅ NEW: Include role from saved user
           };
         } catch (e) {
           console.error('Error parsing saved user:', e);
@@ -491,15 +499,18 @@ export const updateUserChantCount = async (userId, newRounds) => {
       
       // Try to get user info from localStorage
       const savedUser = localStorage.getItem('ekadashi-user');
-      let userData = { fullName: 'Unknown User', phone: 'Unknown' };
+      let userData = { fullName: 'Unknown User', phone: 'Unknown', role: USER_ROLES.FOLK_BOY };
+      // ✅ NEW: Default role
       
       if (savedUser) {
         try {
           const parsedUser = JSON.parse(savedUser);
           userData = {
             fullName: parsedUser.fullName || 'Unknown User',
-            phone: parsedUser.phone || 'Unknown'
+            phone: parsedUser.phone || 'Unknown',
+            role: parsedUser.role || USER_ROLES.FOLK_BOY
           };
+          // ✅ NEW: Include role from saved user
         } catch (e) {
           console.error('Error parsing saved user:', e);
         }

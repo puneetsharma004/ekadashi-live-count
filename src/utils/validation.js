@@ -3,17 +3,25 @@ export const validatePhoneNumber = (phone) => {
   // Remove all non-digits
   const cleanPhone = phone.replace(/\D/g, '');
   
-  // Check if it's a valid length (10 digits for most countries)
-  if (cleanPhone.length < 10 || cleanPhone.length > 15) {
+  // Check if it's exactly 10 digits for Indian mobile numbers
+  if (cleanPhone.length !== 10) {
     return {
       isValid: false,
-      error: 'Please enter a valid phone number (10-15 digits)'
+      error: 'Please enter a valid 10-digit mobile number'
+    };
+  }
+  
+  // Check if it's a valid Indian mobile number (starts with 6, 7, 8, or 9)
+  if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
+    return {
+      isValid: false,
+      error: 'Please enter a valid Indian mobile number'
     };
   }
   
   return {
     isValid: true,
-    cleanPhone
+    cleanPhone: `+91${cleanPhone}` // CHANGED: Now returns +91 prefix
   };
 };
 

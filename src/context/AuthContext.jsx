@@ -36,7 +36,7 @@ export const AuthProvider = ({ children }) => {
     setLoading(false);
   }, []);
 
-  const register = async (fullName, phoneNumber) => {
+  const register = async (fullName, phoneNumber, role) => {
     setLoading(true);
     setError(null);
     
@@ -70,7 +70,8 @@ export const AuthProvider = ({ children }) => {
       // Create new user
       const result = await createUser({
         fullName: fullName.trim(),
-        phone: cleanPhone
+        phone: cleanPhone,
+        role: role // ✅ Add role to the user data
       });
 
       if (result.success) {
@@ -79,6 +80,7 @@ export const AuthProvider = ({ children }) => {
           fullName: fullName.trim(),
           phone: cleanPhone,
           chantCount: 0,
+          role: role, // ✅ Add role to the user object
           isAdmin: adminCheck  // Add admin flag
         };
         

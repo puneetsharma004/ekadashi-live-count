@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext'; // ✅ Fixed path
+import { useAuth } from '../context/AuthContext';
 import { subscribeToLeaderboard } from '../services/firebase.js';
 
 const Leaderboard = () => {
@@ -8,7 +8,6 @@ const Leaderboard = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Subscribe to real-time leaderboard updates
     const unsubscribe = subscribeToLeaderboard((users) => {
       setParticipants(users);
       setLoading(false);
@@ -26,8 +25,45 @@ const Leaderboard = () => {
     }
   };
 
-  const getFirstName = (fullName) => {
-    return fullName.split(' ')[0];
+  // ✅ NEW: Role-based name formatting function
+  const formatDisplayName = (fullName, role, isMobile = false) => {
+    if (!fullName) return '';
+    
+    const nameParts = fullName.trim().split(' ').filter(part => part.length > 0);
+    const capitalize = (str) => str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+    
+    // Check if user is a devotee
+    const isDevotee = role?.toLowerCase() === 'devotee';
+    
+    if (isDevotee) {
+      // For devotees: "Mayapur Prabhu (Devotee)" on desktop, "Mayapur Prabhu" on mobile
+      const firstName = capitalize(nameParts[0]);
+      const devoteeTitle = `${firstName} Prabhu`;
+      
+      return isMobile ? devoteeTitle : `${devoteeTitle} (Devotee)`;
+    } else {
+      // For folk boys: existing format "Puneet S."
+      if (nameParts.length === 1) {
+        return capitalize(nameParts[0]);
+      } else {
+        const firstName = capitalize(nameParts[0]);
+        const surnameInitial = nameParts[nameParts.length - 1].charAt(0).toUpperCase();
+        return `${firstName} ${surnameInitial}.`;
+      }
+    }
+  };
+
+  // ✅ NEW: Get role-based styling
+  const getRoleBasedStyling = (role, isCurrentUser) => {
+    const isDevotee = role?.toLowerCase() === 'devotee';
+    
+    if (isCurrentUser) {
+      return 'text-saffron-300';
+    } else if (isDevotee) {
+      return 'text-orange-200'; // Slightly different color for devotees
+    } else {
+      return 'text-white';
+    }
   };
 
   const totalParticipants = participants.length;
@@ -53,7 +89,7 @@ const Leaderboard = () => {
   }
 
   return (
-    <div className="w-full overflow-hidden"> {/* ✅ Prevent horizontal overflow */}
+    <div className="w-full overflow-hidden">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-2">
         <h3 className="text-xl font-semibold text-gray-300">
           📊 Live Leaderboard
@@ -69,12 +105,12 @@ const Leaderboard = () => {
         </div>
       ) : (
         <>
-          {/* ✅ IMPROVED: Better responsive container with no horizontal scroll */}
           <div className="space-y-2 max-h-96 overflow-y-auto overflow-x-hidden pr-2 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
             {participants.map((participant, index) => {
               const rank = index + 1;
               const isCurrentUser = participant.id === user?.id;
               const isTopThree = rank <= 3;
+              const isDevotee = participant.role?.toLowerCase() === 'devotee';
               
               return (
                 <div
@@ -85,7 +121,9 @@ const Leaderboard = () => {
                       : isTopThree 
                         ? 'bg-gray-800/80 border border-gray-600/50'
                         : 'bg-gray-800/50'
-                  } ${isCurrentUser ? 'transform scale-[1.02]' : ''}`}
+                  } ${isCurrentUser ? 'transform scale-[1.02]' : ''} ${
+                    isDevotee ? 'border-l-2 border-l-orange-400/50' : ''
+                  }`}
                 >
                   {/* ✅ Rank - Fixed width to prevent layout shifts */}
                   <div className={`flex items-center justify-center w-8 h-8 rounded-full mr-3 text-sm font-bold flex-shrink-0 ${
@@ -96,18 +134,23 @@ const Leaderboard = () => {
 
                   {/* ✅ User info - Flexible with proper truncation */}
                   <div className="flex-1 min-w-0">
-                    <div className={`font-medium truncate ${
-                      isCurrentUser ? 'text-saffron-300' : 'text-white'
-                    }`}>
-                      <span className="mr-1">{getFirstName(participant.fullName)}</span>
+                    <div className={`font-medium truncate ${getRoleBasedStyling(participant.role, isCurrentUser)}`}>
+                      {/* ✅ UPDATED: Desktop display */}
+                      <span className="mr-1 hidden sm:inline">
+                        {formatDisplayName(participant.fullName, participant.role, false)}
+                      </span>
+                      {/* ✅ NEW: Mobile display */}
+                      <span className="mr-1 sm:hidden">
+                        {formatDisplayName(participant.fullName, participant.role, true)}
+                      </span>
+                      
                       {isCurrentUser && (
-                        <span className="inline-block text-xs bg-saffron-500 text-white px-2 py-0.5 rounded-full">
+                        <span className="inline-block text-xs bg-saffron-500 text-white px-2 py-0.5 rounded-full ml-1">
                           You
                         </span>
                       )}
                     </div>
                     
-                    {/* ✅ IMPROVED: Better responsive last active display */}
                     {participant.lastUpdated && (
                       <div className="text-xs text-gray-400 truncate">
                         <span className="hidden sm:inline">Last active: </span>
@@ -147,7 +190,6 @@ const Leaderboard = () => {
             })}
           </div>
 
-          {/* ✅ IMPROVED: Better responsive summary stats */}
           <div className="mt-4 pt-4 border-t border-gray-700/50">
             <div className="grid grid-cols-2 gap-4 text-center text-sm">
               <div className="min-w-0">
