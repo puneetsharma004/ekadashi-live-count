@@ -135,7 +135,7 @@ export const stopEvent = async () => {
 // ✅ ENHANCED: Manual complete event (with override tracking)
 export const completeEvent = async () => {
   try {
-    // Get current stats inline
+    // Get current stats
     const querySnapshot = await getDocs(collection(db, USERS_COLLECTION));
     let globalCount = 0;
     const participants = [];
@@ -146,18 +146,45 @@ export const completeEvent = async () => {
       participants.push({ id: doc.id, ...data });
     });
     
-    const settingsRef = doc(db, EVENT_SETTINGS_COLLECTION, 'current');
-    await updateDoc(settingsRef, {
-      eventActive: false,
-      status: 'completed',
-      manuallyCompletedAt: serverTimestamp(), // ✅ Track manual override
-      completedAt: serverTimestamp(),
-      finalStats: {
-        totalRounds: globalCount,
-        totalParticipants: participants.length,
-        activeParticipants: participants.filter(p => p.chantCount > 0).length
-      }
-    });
+    // Get current event settings
+    const currentEventResult = await getCurrentEvent();
+    if (currentEventResult.success) {
+      const currentEvent = currentEventResult.event;
+      
+      // Update event status
+      const settingsRef = doc(db, EVENT_SETTINGS_COLLECTION, 'current');
+      await updateDoc(settingsRef, {
+        eventActive: false,
+        status: 'completed',
+        completedAt: serverTimestamp(),
+        finalStats: {
+          totalRounds: globalCount,
+          totalParticipants: participants.length,
+          activeParticipants: participants.filter(p => p.chantCount > 0).length
+        }
+      });
+      
+      // ✅ NEW: Automatically save to history
+      const historyData = {
+        ...currentEvent,
+        completedAt: serverTimestamp(),
+        finalStats: {
+          totalRounds: globalCount,
+          totalParticipants: participants.length,
+          activeParticipants: participants.filter(p => p.chantCount > 0).length,
+          topPerformers: participants
+            .filter(p => p.chantCount > 0)
+            .sort((a, b) => b.chantCount - a.chantCount)
+            .slice(0, 10)
+        },
+        // Store top 10 participants for history
+        topParticipants: participants
+          .sort((a, b) => b.chantCount - a.chantCount)
+          .slice(0, 10)
+      };
+      
+      await addDoc(collection(db, EVENTS_HISTORY_COLLECTION), historyData);
+    }
     
     return { success: true };
   } catch (error) {
@@ -165,6 +192,7 @@ export const completeEvent = async () => {
     return { success: false, error: error.message };
   }
 };
+
 
 // ✅ NEW: Auto-start function (silently updates event status in background)
 const autoStartEvent = async () => {

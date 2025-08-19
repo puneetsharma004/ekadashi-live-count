@@ -24,6 +24,54 @@ import { doc, deleteDoc } from 'firebase/firestore';
 // ✅ ADD: Import swipe functionality
 import { useSwipeable } from 'react-swipeable';
 
+import { 
+  IoPlay, 
+  IoPause, 
+  IoCheckmarkDone, 
+  IoArchive,
+  IoPersonAdd,
+  IoStatsChart,
+  IoPeople,
+  IoTrophy,
+  // ✅ NEW: Navigation and header icons
+  IoGrid,
+  IoCreate,
+  IoTime,
+  IoSettings,
+  IoShieldCheckmark,
+  // ✅ NEW: Form icons
+  IoCalendar,
+  IoText,
+  IoPrism,
+  IoInformationCircle,
+  IoAdd,
+  IoCheckmark,
+  IoAlert
+} from 'react-icons/io5';
+
+// ✅ ADD: Import date/time pickers and additional icons
+import DatePicker from 'react-date-picker';
+import TimePicker from 'react-time-picker';
+import 'react-date-picker/dist/DatePicker.css';
+import 'react-time-picker/dist/TimePicker.css';
+import 'react-calendar/dist/Calendar.css';
+
+// ✅ NEW: Vaishnava Calendar Data (Ekadashi dates for 2025)
+const VAISHNAVA_EVENTS = [
+  { date: '2025-01-13', title: 'Saphala Ekadashi', type: 'ekadashi' },
+  { date: '2025-01-29', title: 'Putrada Ekadashi', type: 'ekadashi' },
+  { date: '2025-02-12', title: 'Shattila Ekadashi', type: 'ekadashi' },
+  { date: '2025-02-27', title: 'Jaya Ekadashi', type: 'ekadashi' },
+  { date: '2025-03-03', title: 'Gaura Purnima', type: 'festival' },
+  { date: '2025-03-14', title: 'Vijaya Ekadashi', type: 'ekadashi' },
+  { date: '2025-03-29', title: 'Amalaki Ekadashi', type: 'ekadashi' },
+  { date: '2025-04-13', title: 'Papamochani Ekadashi', type: 'ekadashi' },
+  { date: '2025-04-28', title: 'Kamada Ekadashi', type: 'ekadashi' },
+  { date: '2025-05-12', title: 'Varuthini Ekadashi', type: 'ekadashi' },
+  { date: '2025-05-27', title: 'Mohini Ekadashi', type: 'ekadashi' },
+  // Add more dates as needed...
+];
+
 // ✅ NEW: Swipeable Participant Row Component
 const SwipeableParticipantRow = ({ participant, onCall, onDelete, isSelected, onSelect, showCheckbox }) => {
   const [isSwipeOpen, setIsSwipeOpen] = useState(false);
@@ -166,13 +214,16 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
   const [participantFilter, setParticipantFilter] = useState('all'); // all, active, inactive
 
   // New event form state
+  // ✅ FIXED: Proper time format in initial state
   const [newEventForm, setNewEventForm] = useState({
     eventName: '',
+    eventDate: new Date(), // ✅ Default to today
     globalGoal: 666,
-    startTime: 6,
-    endTime: 24,
+    startTime: '06:00', // ✅ String format, not number
+    endTime: '23:59',   // ✅ String format, not number  
     description: ''
   });
+
 
   useEffect(() => {
     const unsubscribeCount = subscribeToGlobalCount(setGlobalCount);
@@ -348,42 +399,58 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
   };
 
   const handleCompleteEvent = async () => {
-    if (window.confirm('Complete this event? This will finalize all stats and prepare for archiving.')) {
-      setLoading(true);
-      const result = await completeEvent();
-      if (result.success) {
-        showMessage('success', '✅ Event completed successfully!');
-        loadEventsHistory();
-      } else {
-        showMessage('error', `Failed to complete event: ${result.error}`);
-      }
-      setLoading(false);
+  if (window.confirm('Complete this event? This will finalize all stats and save to history.')) {
+    setLoading(true);
+    const result = await completeEvent();
+    if (result.success) {
+      // ✅ NEW: Automatically save to history when completed
+      await loadEventsHistory(); // Refresh history to show the completed event
+      showMessage('success', '✅ Event completed and saved to history!');
+    } else {
+      showMessage('error', `Failed to complete event: ${result.error}`);
     }
-  };
+    setLoading(false);
+  }
+};
+
 
   const handleCreateNewEvent = async (e) => {
-    e.preventDefault();
+  e.preventDefault();
+  
+  if (window.confirm('Create new event? This will archive the current event and clear all participant data.')) {
+    setLoading(true);
     
-    if (window.confirm('Create new event? This will archive the current event and clear all participant data.')) {
-      setLoading(true);
-      const result = await createNewEvent(newEventForm);
-      if (result.success) {
-        showMessage('success', '🎊 New event created successfully!');
-        setCurrentView('dashboard');
-        setNewEventForm({
-          eventName: '',
-          globalGoal: 666,
-          startTime: 6,
-          endTime: 24,
-          description: ''
-        });
-        loadEventsHistory();
-      } else {
-        showMessage('error', `Failed to create event: ${result.error}`);
-      }
-      setLoading(false);
+    // ✅ FIXED: Convert time strings to hours for backend
+    const startHour = newEventForm.startTime ? parseInt(newEventForm.startTime.split(':')[0]) : 6;
+    const endHour = newEventForm.endTime ? parseInt(newEventForm.endTime.split(':')) : 24;
+    
+    const eventData = {
+      ...newEventForm,
+      startTime: startHour, // Backend expects number
+      endTime: endHour      // Backend expects number
+    };
+    
+    const result = await createNewEvent(eventData);
+    if (result.success) {
+      showMessage('success', '🎊 New event created successfully!');
+      setCurrentView('dashboard');
+      // ✅ FIXED: Reset with proper format
+      setNewEventForm({
+        eventName: '',
+        eventDate: new Date(),
+        globalGoal: 666,
+        startTime: '06:00',
+        endTime: '23:59',
+        description: ''
+      });
+      loadEventsHistory();
+    } else {
+      showMessage('error', `Failed to create event: ${result.error}`);
     }
-  };
+    setLoading(false);
+  }
+};
+
 
   const handleArchiveCurrentEvent = async () => {
     if (window.confirm(
@@ -415,43 +482,104 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
 
   return (
     <div className="space-y-6">
-      {/* Admin Header with Navigation */}
+      {/* // ✅ IMPROVED: Premium Admin Header */}
       <div className="card-devotional bg-gradient-to-r from-red-900/20 to-orange-900/20 border-red-500/30">
-        <div className="flex flex-col sm:flex-row items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold text-red-400 mb-2 sm:mb-0">
-            🔧 Advanced Event Manager
-          </h2>
-          <div className="flex flex-wrap gap-2">
-            {['dashboard', 'participants', 'create', 'history'].map((view) => (
-              <button
-                key={view}
-                onClick={() => setCurrentView(view)}
-                className={`px-3 py-1 rounded text-sm transition-colors ${
-                  currentView === view 
-                    ? 'bg-saffron-500 text-white' 
-                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                }`}
-              >
-                {view === 'participants' ? '👥 Participants' : 
-                 view.charAt(0).toUpperCase() + view.slice(1)}
-              </button>
-            ))}
+        {/* Header Title Section */}
+        <div className="flex flex-col sm:flex-row items-center justify-between mb-6">
+          <div className="flex items-center space-x-3 mb-4 sm:mb-0">
+            <div className="p-2 bg-red-500/20 rounded-lg">
+              <IoSettings className="text-2xl text-red-400" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-red-400">
+                Advanced Event Manager
+              </h2>
+              <p className="text-sm text-gray-400">Complete event control & analytics</p>
+            </div>
+          </div>
+          
+          {/* Admin Badge */}
+          <div className="flex items-center space-x-2 bg-red-500/10 px-3 py-2 rounded-lg border border-red-500/20">
+            <IoShieldCheckmark className="text-lg text-red-400" />
+            <span className="text-sm font-medium text-red-300">Admin Access</span>
+            {DEV_MODE && (
+              <span className="ml-2 bg-yellow-500 text-black px-2 py-1 rounded text-xs font-bold">
+                DEV
+              </span>
+            )}
           </div>
         </div>
         
-        <div className="text-center text-gray-300">
-          <p>Welcome, Admin {user?.fullName}</p>
-          <p className="text-sm">
-            Current Event: 
-            <span className={`ml-2 px-2 py-1 rounded text-xs font-bold ${
-              eventStatus === 'Active' ? 'bg-green-500 text-white' :
-              eventStatus === 'Completed' ? 'bg-blue-500 text-white' :
-              'bg-red-500 text-white'
-            }`}>
-              {eventStatus}
-            </span>
-            {DEV_MODE && <span className="ml-2 bg-yellow-500 text-black px-2 py-1 rounded text-xs">DEV MODE</span>}
-          </p>
+        {/* Navigation Tabs */}
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap justify-center sm:justify-start gap-2 sm:gap-2 mb-6">
+          {[
+            { key: 'dashboard', label: 'Dashboard', icon: IoGrid },
+            { key: 'participants', label: 'Participants', icon: IoPeople },
+            { key: 'create', label: 'Create Event', icon: IoCreate },
+            { key: 'history', label: 'History', icon: IoTime }
+          ].map((item) => {
+            const IconComponent = item.icon;
+            const isActive = currentView === item.key;
+            
+            return (
+              <button
+                key={item.key}
+                onClick={() => setCurrentView(item.key)}
+                className={`flex items-center justify-center sm:justify-start space-x-2 p-3 sm:px-4 sm:py-2 rounded-lg text-sm font-medium transition-all duration-200 min-h-[80px] sm:min-h-0 flex-col sm:flex-row space-y-1 sm:space-y-0 ${
+                  isActive 
+                    ? 'bg-saffron-500 text-white shadow-lg sm:transform sm:scale-105' 
+                    : 'bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 hover:text-white'
+                }`}
+              >
+                <IconComponent className="text-xl sm:text-lg" />
+                <span className="text-xs sm:text-sm text-center sm:text-left leading-tight">{item.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        
+        {/* Status Information */}
+        <div className="bg-gray-800/30 rounded-lg p-4">
+          <div className="flex flex-col sm:flex-row items-center justify-between space-y-2 sm:space-y-0">
+            <div className="flex items-center space-x-3">
+              <div className="flex items-center space-x-2">
+                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                <span className="text-gray-300">Welcome, <strong className="text-white">{user?.fullName}</strong></span>
+              </div>
+            </div>
+            
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2">
+                <span className="text-gray-400 text-sm">Current Event:</span>
+                <div className={`flex items-center space-x-2 px-3 py-1 rounded-full text-xs font-bold ${
+                  eventStatus === 'Active' 
+                    ? 'bg-green-500/20 text-green-400 border border-green-500/30' :
+                  eventStatus === 'Completed' 
+                    ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
+                    'bg-red-500/20 text-red-400 border border-red-500/30'
+                }`}>
+                  <div className={`w-2 h-2 rounded-full ${
+                    eventStatus === 'Active' ? 'bg-green-400' :
+                    eventStatus === 'Completed' ? 'bg-blue-400' : 'bg-red-400'
+                  }`}></div>
+                  <span>{eventStatus}</span>
+                </div>
+              </div>
+              
+              {/* Quick Stats */}
+              <div className="hidden md:flex items-center space-x-4 text-xs text-gray-400">
+                <div className="flex items-center space-x-1">
+                  <IoPeople className="text-blue-400" />
+                  <span>{participants.length} users</span>
+                </div>
+                <div className="flex items-center space-x-1">
+                  <IoTrophy className="text-saffron-400" />
+                  <span>{activeParticipants.length} active</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -542,72 +670,106 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
         </div>
       )}
 
-      {/* Existing Dashboard, Create, and History views remain the same... */}
       
-      {/* Dashboard View */}
+     {/* // ✅ UPDATED: Enhanced Event Controls section in your dashboard view */}
       {currentView === 'dashboard' && (
         <>
-          {/* Event Controls */}
-          <div className="card-devotional">
-            <h3 className="text-xl font-semibold text-gray-300 mb-4">Event Controls</h3>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <button
-                onClick={handleStartEvent}
-                disabled={loading || eventSettings?.eventActive}
-                className="btn-saffron disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                🎯 Start Event
-              </button>
+          {/* ✅ IMPROVED: Event Controls with Individual Group Backgrounds */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Primary Event Control Group */}
+            <div className="card-devotional bg-gradient-to-r from-green-900/10 to-blue-900/10 border-green-500/20">
+              <div className="mb-4">
+                <h4 className="text-lg font-semibold text-gray-300 mb-1">Event Control</h4>
+                <p className="text-sm text-gray-400">Start and stop event submissions</p>
+              </div>
               
-              <button
-                onClick={handleStopEvent}
-                disabled={loading || !eventSettings?.eventActive}
-                className="bg-yellow-600 hover:bg-yellow-700 text-white font-semibold py-3 px-6 rounded-lg shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                ⏸️ Stop Event
-              </button>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  onClick={handleStartEvent}
+                  disabled={loading || eventSettings?.eventActive}
+                  className="flex items-center justify-center space-x-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3 px-4 rounded-lg shadow-lg transition-all duration-200 w-full"
+                >
+                  <IoPlay className="text-lg" />
+                  <span>{eventSettings?.eventActive ? 'Event Active' : 'Start Event'}</span>
+                </button>
+                
+                <button
+                  onClick={handleStopEvent}
+                  disabled={loading || !eventSettings?.eventActive}
+                  className="flex items-center justify-center space-x-2 bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3 px-4 rounded-lg shadow-lg transition-all duration-200 w-full"
+                >
+                  <IoPause className="text-lg" />
+                  <span>{eventSettings?.eventActive ? 'Stop Event' : 'Event Stopped'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Event Lifecycle Group */}
+            <div className="card-devotional bg-gradient-to-r from-purple-900/10 to-indigo-900/10 border-purple-500/20">
+              <div className="mb-4">
+                <h4 className="text-lg font-semibold text-gray-300 mb-1">Event Lifecycle</h4>
+                <p className="text-sm text-gray-400">Finalize and manage event data</p>
+              </div>
               
-              <button
-                onClick={handleCompleteEvent}
-                disabled={loading}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                ✅ Complete Event
-              </button>
-              
-              <button
-                onClick={handleArchiveCurrentEvent}
-                disabled={loading}
-                className="bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-6 rounded-lg shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                📁 Archive Event
-              </button>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  onClick={handleCompleteEvent}
+                  disabled={loading}
+                  className="flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3 px-4 rounded-lg shadow-lg transition-all duration-200 w-full"
+                >
+                  <IoCheckmarkDone className="text-lg" />
+                  <span>Complete Event</span>
+                </button>
+                
+                <button
+                  onClick={handleArchiveCurrentEvent}
+                  disabled={loading}
+                  className="flex items-center justify-center space-x-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3 px-4 rounded-lg shadow-lg transition-all duration-200 w-full"
+                >
+                  <IoArchive className="text-lg" />
+                  <span>Archive Event</span>
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* Real-time Stats */}
+          {/* ✅ IMPROVED: Real-time Stats with React Icons */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="card-devotional text-center">
-              <h3 className="text-lg font-semibold text-gray-300 mb-2">Collective Count</h3>
+              <div className="flex items-center justify-center space-x-2 mb-2">
+                <IoStatsChart className="text-xl text-saffron-400" />
+                <h3 className="text-lg font-semibold text-gray-300">Collective Count</h3>
+              </div>
               <div className="text-3xl font-bold text-saffron-400">{globalCount}</div>
               <div className="text-sm text-gray-400">of {eventSettings?.globalGoal || 666}</div>
             </div>
+            
             <div className="card-devotional text-center">
-              <h3 className="text-lg font-semibold text-gray-300 mb-2">Progress</h3>
+              <div className="flex items-center justify-center space-x-2 mb-2">
+                <IoTrophy className="text-xl text-devotional-gold" />
+                <h3 className="text-lg font-semibold text-gray-300">Progress</h3>
+              </div>
               <div className="text-3xl font-bold text-devotional-gold">{progressPercentage}%</div>
             </div>
+            
             <div className="card-devotional text-center">
-              <h3 className="text-lg font-semibold text-gray-300 mb-2">Total Users</h3>
+              <div className="flex items-center justify-center space-x-2 mb-2">
+                <IoPeople className="text-xl text-blue-400" />
+                <h3 className="text-lg font-semibold text-gray-300">Total Users</h3>
+              </div>
               <div className="text-3xl font-bold text-blue-400">{participants.length}</div>
             </div>
+            
             <div className="card-devotional text-center">
-              <h3 className="text-lg font-semibold text-gray-300 mb-2">Active</h3>
+              <div className="flex items-center justify-center space-x-2 mb-2">
+                <IoPersonAdd className="text-xl text-green-400" />
+                <h3 className="text-lg font-semibold text-gray-300">Active</h3>
+              </div>
               <div className="text-3xl font-bold text-green-400">{activeParticipants.length}</div>
             </div>
           </div>
 
-          {/* Top Performers */}
+          {/* Top Performers section remains the same... */}
           <div className="card-devotional">
             <h3 className="text-xl font-semibold text-gray-300 mb-4">Top Performers</h3>
             <div className="space-y-2 max-h-60 overflow-y-auto">
@@ -630,101 +792,220 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
         </>
       )}
 
-      {/* Create New Event View - keeping existing code... */}
+      {/* // ✅ ENHANCED: Create New Event Form */}
       {currentView === 'create' && (
-        <div className="card-devotional">
-          <h3 className="text-xl font-semibold text-gray-300 mb-4">Create New Event</h3>
-          
-          <form onSubmit={handleCreateNewEvent} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Event Name
-                </label>
-                <input
-                  type="text"
-                  value={newEventForm.eventName}
-                  onChange={(e) => setNewEventForm(prev => ({...prev, eventName: e.target.value}))}
-                  placeholder="e.g., Ekadashi Chanting Marathon 2025"
-                  className="input-devotional"
-                  required
-                />
+        <div className="space-y-6">
+          {/* Form Header */}
+          <div className="card-devotional bg-gradient-to-r from-blue-900/10 to-indigo-900/10 border-blue-500/20">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="p-2 bg-blue-500/20 rounded-lg">
+                <IoCreate className="text-2xl text-blue-400" />
               </div>
-              
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Target Rounds
-                </label>
-                <input
-                  type="number"
-                  value={newEventForm.globalGoal}
-                  onChange={(e) => setNewEventForm(prev => ({...prev, globalGoal: parseInt(e.target.value)}))}
-                  min="1"
-                  max="10000"
-                  className="input-devotional"
-                  required
-                />
+                <h3 className="text-xl font-semibold text-gray-300">Create New Event</h3>
+                <p className="text-sm text-gray-400">Set up a new Ekadashi chanting event</p>
               </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Start Time (24hr)
-                </label>
-                <input
-                  type="number"
-                  value={newEventForm.startTime}
-                  onChange={(e) => setNewEventForm(prev => ({...prev, startTime: parseInt(e.target.value)}))}
-                  min="0"
-                  max="23"
-                  className="input-devotional"
-                  required
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  End Time (24hr)
-                </label>
-                <input
-                  type="number"
-                  value={newEventForm.endTime}
-                  onChange={(e) => setNewEventForm(prev => ({...prev, endTime: parseInt(e.target.value)}))}
-                  min="1"
-                  max="24"
-                  className="input-devotional"
-                  required
-                />
-              </div>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Event Description
-              </label>
-              <textarea
-                value={newEventForm.description}
-                onChange={(e) => setNewEventForm(prev => ({...prev, description: e.target.value}))}
-                placeholder="Describe the event purpose, special instructions, etc."
-                rows="3"
-                className="input-devotional resize-none"
-              />
             </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full btn-saffron disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? (
-                <span className="flex items-center justify-center">
-                  <div className="spinner mr-2"></div>
-                  Creating New Event...
-                </span>
-              ) : (
-                '🎊 Create New Event'
-              )}
-            </button>
-          </form>
+            {/* Quick Ekadashi Reference */}
+            <div className="bg-gray-800/30 rounded-lg p-4">
+              <div className="flex items-center space-x-2 mb-3">
+                <IoCalendar className="text-lg text-saffron-400" />
+                <h4 className="text-sm font-semibold text-gray-300">Upcoming Ekadashi Dates</h4>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 text-xs">
+                {VAISHNAVA_EVENTS.slice(0, 6).map((event) => (
+                  <div
+                    key={event.date}
+                    onClick={() => {
+                      const eventDate = new Date(event.date);
+                      setNewEventForm(prev => ({
+                        ...prev,
+                        eventDate: eventDate,
+                        eventName: event.title
+                      }));
+                    }}
+                    className={`p-2 rounded cursor-pointer transition-colors ${
+                      event.type === 'ekadashi' 
+                        ? 'bg-saffron-500/10 hover:bg-saffron-500/20 border border-saffron-500/20' 
+                        : 'bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20'
+                    }`}
+                  >
+                    <div className="font-medium text-gray-300">{event.title}</div>
+                    <div className="text-gray-400">{new Date(event.date).toLocaleDateString('en-IN')}</div>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                <IoInformationCircle className="inline mr-1" />
+                Click on any date to auto-fill the form
+              </p>
+            </div>
+          </div>
+
+          {/* Enhanced Form */}
+          <div className="card-devotional">
+            <form onSubmit={handleCreateNewEvent} className="space-y-6">
+              {/* Event Details Section */}
+              <div>
+                <div className="flex items-center space-x-2 mb-4">
+                  <IoText className="text-lg text-gray-400" />
+                  <h4 className="text-lg font-semibold text-gray-300">Event Details</h4>
+                </div>
+                
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div>
+                    <label className="flex items-center space-x-2 text-sm font-medium text-gray-300 mb-2">
+                      <IoText className="text-sm" />
+                      <span>Event Name</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={newEventForm.eventName}
+                      onChange={(e) => setNewEventForm(prev => ({...prev, eventName: e.target.value}))}
+                      placeholder="e.g., Saphala Ekadashi Chanting Marathon"
+                      className="input-devotional"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="flex items-center space-x-2 text-sm font-medium text-gray-300 mb-2">
+                      <IoPrism className="text-sm" />
+                      <span>Target Rounds</span>
+                    </label>
+                    <input
+                      type="number"
+                      value={newEventForm.globalGoal}
+                      onChange={(e) => setNewEventForm(prev => ({...prev, globalGoal: parseInt(e.target.value)}))}
+                      min="1"
+                      max="10000"
+                      className="input-devotional"
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Date & Time Section */}
+              {/* // ✅ REPLACE the entire Date & Time section with this: */}
+                <div>
+                  <div className="flex items-center space-x-2 mb-4">
+                    <IoCalendar className="text-lg text-gray-400" />
+                    <h4 className="text-lg font-semibold text-gray-300">Date & Time</h4>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    {/* Event Date */}
+                    <div>
+                      <label className="flex items-center space-x-2 text-sm font-medium text-gray-300 mb-2">
+                        <IoCalendar className="text-sm" />
+                        <span>Event Date</span>
+                      </label>
+                      <input
+                        type="date"
+                        value={newEventForm.eventDate ? newEventForm.eventDate.toISOString().split('T')[0] : ''}
+                        onChange={(e) => setNewEventForm(prev => ({
+                          ...prev, 
+                          eventDate: e.target.value ? new Date(e.target.value) : null
+                        }))}
+                        className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-saffron-500 focus:ring-2 focus:ring-saffron-500/20 transition-colors"
+                        required
+                      />
+                    </div>
+
+                    {/* Start Time */}
+                    <div>
+                      <label className="flex items-center space-x-2 text-sm font-medium text-gray-300 mb-2">
+                        <IoTime className="text-sm" />
+                        <span>Start Time</span>
+                      </label>
+                      <input
+                        type="time"
+                        value={newEventForm.startTime}
+                        onChange={(e) => setNewEventForm(prev => ({...prev, startTime: e.target.value}))}
+                        className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-saffron-500 focus:ring-2 focus:ring-saffron-500/20 transition-colors"
+                        required
+                      />
+                    </div>
+
+                    {/* End Time */}
+                    <div>
+                      <label className="flex items-center space-x-2 text-sm font-medium text-gray-300 mb-2">
+                        <IoTime className="text-sm" />
+                        <span>End Time</span>
+                      </label>
+                      <input
+                        type="time"
+                        value={newEventForm.endTime}
+                        onChange={(e) => setNewEventForm(prev => ({...prev, endTime: e.target.value}))}
+                        className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-saffron-500 focus:ring-2 focus:ring-saffron-500/20 transition-colors"
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
+
+
+              {/* Description Section */}
+              <div>
+                <div className="flex items-center space-x-2 mb-4">
+                  <IoInformationCircle className="text-lg text-gray-400" />
+                  <h4 className="text-lg font-semibold text-gray-300">Event Description</h4>
+                </div>
+                
+                <textarea
+                  value={newEventForm.description}
+                  onChange={(e) => setNewEventForm(prev => ({...prev, description: e.target.value}))}
+                  placeholder="Describe the event purpose, special instructions, fasting guidelines, etc."
+                  rows="4"
+                  className="input-devotional resize-none w-full"
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="border-t border-gray-700/50 pt-6">
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentView('dashboard');
+                      setNewEventForm({
+                        eventName: '',
+                        eventDate: null,
+                        globalGoal: 666,
+                        startTime: '06:00',
+                        endTime: '23:59',
+                        description: ''
+                      });
+                    }}
+                    className="flex items-center justify-center space-x-2 px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
+                  >
+                    <IoAlert className="text-lg" />
+                    <span>Cancel</span>
+                  </button>
+                  
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="flex-1 flex items-center justify-center space-x-2 bg-saffron-600 hover:bg-saffron-700 disabled:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg shadow-lg transition-all duration-200"
+                  >
+                    {loading ? (
+                      <>
+                        <div className="spinner mr-2"></div>
+                        <span>Creating New Event...</span>
+                      </>
+                    ) : (
+                      <>
+                        <IoAdd className="text-lg" />
+                        <span>Create New Event</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
