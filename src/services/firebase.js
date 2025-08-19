@@ -424,6 +424,54 @@ export const getUserByPhone = async (phoneNumber) => {
   }
 };
 
+// ✅ NEW: Set user's total chant count (replacement, not additive)
+export const setUserTotalChantCount = async (userId, totalRounds) => {
+  try {
+    const userRef = doc(db, USERS_COLLECTION, userId);
+    
+    // Check if document exists first
+    const docSnap = await getDoc(userRef);
+    
+    if (docSnap.exists()) {
+      // Document exists - update it with new total
+      await updateDoc(userRef, {
+        chantCount: totalRounds, // ✅ Set to exact total (not increment)
+        lastUpdated: new Date()
+      });
+    } else {
+      // Document doesn't exist - create it
+      const savedUser = localStorage.getItem('ekadashi-user');
+      let userData = { fullName: 'Unknown User', phone: 'Unknown' };
+      
+      if (savedUser) {
+        try {
+          const parsedUser = JSON.parse(savedUser);
+          userData = {
+            fullName: parsedUser.fullName || 'Unknown User',
+            phone: parsedUser.phone || 'Unknown'
+          };
+        } catch (e) {
+          console.error('Error parsing saved user:', e);
+        }
+      }
+      
+      // Create new document with total chant count
+      await setDoc(userRef, {
+        ...userData,
+        chantCount: totalRounds,
+        createdAt: new Date(),
+        lastUpdated: new Date()
+      });
+    }
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Error setting total chant count:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+
 export const updateUserChantCount = async (userId, newRounds) => {
   try {
     const userRef = doc(db, USERS_COLLECTION, userId);

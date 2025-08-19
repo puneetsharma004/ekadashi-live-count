@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { updateUserChantCount } from '../services/firebase.js';
+import { useAuth } from '../context/AuthContext'; // ✅ Fixed path
+import { updateUserChantCount, setUserTotalChantCount } from '../services/firebase.js';
 import { validateChantRounds } from '../utils/validation.js';
 
 const ChantForm = () => {
@@ -9,6 +9,7 @@ const ChantForm = () => {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [pendingSubmissions, setPendingSubmissions] = useState([]);
+  const [isAdditiveMode, setIsAdditiveMode] = useState(false); // ✅ NEW: Toggle between modes
 
   const clearMessage = () => {
     setTimeout(() => {
@@ -27,21 +28,45 @@ const ChantForm = () => {
       return;
     }
 
+    // Additional validation for replacement mode
+    if (!isAdditiveMode && validation.rounds < (user?.chantCount || 0)) {
+      const confirmDecrease = window.confirm(
+        `This will decrease your count from ${user?.chantCount || 0} to ${validation.rounds}. Are you sure?`
+      );
+      if (!confirmDecrease) return;
+    }
+
     setLoading(true);
     
     try {
-      // Attempt to update Firebase
-      const result = await updateUserChantCount(user.id, validation.rounds);
+      let result;
+      let newTotal;
+
+      if (isAdditiveMode) {
+        // ✅ ADDITIVE MODE: Add new rounds to existing total
+        result = await updateUserChantCount(user.id, validation.rounds);
+        newTotal = (user?.chantCount || 0) + validation.rounds;
+      } else {
+        // ✅ REPLACEMENT MODE: Set total to the entered number
+        result = await setUserTotalChantCount(user.id, validation.rounds);
+        newTotal = validation.rounds;
+      }
       
       if (result.success) {
         // Update local auth state
-        const newTotal = user.chantCount + validation.rounds;
         updateAuthUser(newTotal);
         
-        setMessage({ 
-          type: 'success', 
-          text: `✅ Added ${validation.rounds} rounds! Your total: ${newTotal}` 
-        });
+        const successMessage = isAdditiveMode
+          ? `✅ Added ${validation.rounds} rounds! Your total: ${newTotal}`
+          : `✅ Updated to ${newTotal} total rounds! ${
+              validation.rounds > (user?.chantCount || 0) 
+                ? `(+${validation.rounds - (user?.chantCount || 0)})` 
+                : validation.rounds < (user?.chantCount || 0)
+                  ? `(${validation.rounds - (user?.chantCount || 0)})`
+                  : ''
+            }`;
+
+        setMessage({ type: 'success', text: successMessage });
         setRounds('');
         clearMessage();
       } else {
@@ -54,6 +79,7 @@ const ChantForm = () => {
       const submission = {
         id: Date.now(),
         rounds: validation.rounds,
+        isAdditive: isAdditiveMode,
         timestamp: new Date().toISOString()
       };
       
@@ -74,19 +100,27 @@ const ChantForm = () => {
 
   const retrySubmission = async (submission) => {
     try {
-      const result = await updateUserChantCount(user.id, submission.rounds);
+      let result;
+      let newTotal;
+
+      if (submission.isAdditive) {
+        result = await updateUserChantCount(user.id, submission.rounds);
+        newTotal = (user?.chantCount || 0) + submission.rounds;
+      } else {
+        result = await setUserTotalChantCount(user.id, submission.rounds);
+        newTotal = submission.rounds;
+      }
       
       if (result.success) {
         // Remove from pending submissions
         setPendingSubmissions(prev => prev.filter(s => s.id !== submission.id));
         
         // Update auth state
-        const newTotal = user.chantCount + submission.rounds;
         updateAuthUser(newTotal);
         
-        setMessage({ 
-          type: 'success', 
-          text: `✅ Successfully synced ${submission.rounds} rounds!` 
+        setMessage({
+          type: 'success',
+          text: `✅ Successfully synced ${submission.rounds} rounds!`
         });
         clearMessage();
       } else {
@@ -107,69 +141,188 @@ const ChantForm = () => {
     }
   };
 
-  return (
-    <div>
-      <h3 className="text-xl font-semibold text-gray-300 mb-4 text-center">
-        Submit Your Chanted Rounds
-      </h3>
-      
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label htmlFor="rounds" className="block text-sm font-medium text-gray-300 mb-2">
-            Number of Rounds Completed
-          </label>
-          <input
-            type="text"
-            id="rounds"
-            value={rounds}
-            onChange={handleInputChange}
-            placeholder="Enter number of rounds"
-            className="input-devotional text-center text-lg font-semibold"
-            disabled={loading}
-            autoComplete="off"
-          />
-          <p className="text-gray-400 text-xs mt-1 text-center">
-            Enter only positive numbers (1-1000)
-          </p>
-        </div>
+  // ✅ NEW: Toggle between modes
+  const handleModeToggle = () => {
+    setIsAdditiveMode(!isAdditiveMode);
+    setRounds(''); // Clear input when switching modes
+    setMessage({ type: '', text: '' }); // Clear any existing messages
+  };
 
-        <button
-          type="submit"
-          disabled={loading || !rounds.trim()}
-          className="w-full btn-saffron text-lg py-4 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {loading ? (
-            <span className="flex items-center justify-center">
-              <div className="spinner mr-2"></div>
-              Submitting...
-            </span>
-          ) : (
+  return (
+    <div className="space-y-6">
+      {/* ✅ NEW: Mode Toggle */}
+      <div className="flex justify-center">
+        <div className="bg-gray-800/50 rounded-lg p-1 flex">
+          <button
+            type="button"
+            onClick={handleModeToggle}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+              !isAdditiveMode
+                ? 'bg-saffron-500 text-white shadow-lg'
+                : 'text-gray-300 hover:text-white'
+            }`}
+          >
+            📊 Update Total
+          </button>
+          <button
+            type="button"
+            onClick={handleModeToggle}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+              isAdditiveMode
+                ? 'bg-saffron-500 text-white shadow-lg'
+                : 'text-gray-300 hover:text-white'
+            }`}
+          >
+            ➕ Add New
+          </button>
+        </div>
+      </div>
+
+      {/* ✅ DYNAMIC: Instructions based on mode */}
+      <div className="bg-gradient-to-r from-saffron-900/10 to-devotional-gold/5 border border-saffron-500/30 rounded-lg p-4">
+        <h3 className="text-lg font-semibold text-saffron-300 mb-3 flex items-center">
+          📋 How to Submit Your Chanted Rounds
+        </h3>
+        
+        <div className="space-y-3 text-sm">
+          {!isAdditiveMode ? (
+            // ✅ REPLACEMENT MODE INSTRUCTIONS
             <>
-              🕉️ Submit Rounds
+              <div className="bg-gray-800/50 rounded-lg p-3">
+                <h4 className="text-saffron-400 font-semibold mb-2">🔢 Update Total Mode (Recommended)</h4>
+                <div className="text-gray-300 space-y-1">
+                  <p>• <strong>Current total:</strong> {user?.chantCount || 0} rounds</p>
+                  <p>• <strong>Enter:</strong> Your NEW total number of rounds chanted</p>
+                  <p>• <strong>System:</strong> Will UPDATE your total to this number</p>
+                </div>
+              </div>
+              <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-3">
+                <h4 className="text-blue-400 font-semibold mb-2">✅ Example</h4>
+                <div className="text-gray-300 text-xs space-y-1">
+                  <p>10:00 AM - You have 0, chant 2 rounds → Enter: <strong>2</strong> → Total becomes: <strong>2</strong></p>
+                  <p>12:00 PM - You chant 12 more (total 14) → Enter: <strong>14</strong> → Total becomes: <strong>14</strong></p>
+                  <p>2:00 PM - You chant 5 more (total 19) → Enter: <strong>19</strong> → Total becomes: <strong>19</strong></p>
+                </div>
+              </div>
+              <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-3">
+                <h4 className="text-green-400 font-semibold mb-2">💡 Pro Tip</h4>
+                <div className="text-gray-300 text-xs">
+                  <p>Just count your total rounds chanted and enter that number. Simple!</p>
+                </div>
+              </div>
+            </>
+          ) : (
+            // ✅ ADDITIVE MODE INSTRUCTIONS
+            <>
+              <div className="bg-gray-800/50 rounded-lg p-3">
+                <h4 className="text-saffron-400 font-semibold mb-2">🔢 Add New Rounds Mode</h4>
+                <div className="text-gray-300 space-y-1">
+                  <p>• <strong>Current total:</strong> {user?.chantCount || 0} rounds</p>
+                  <p>• <strong>Submit:</strong> Only the NEW rounds you just chanted</p>
+                  <p>• <strong>System:</strong> Will ADD your new rounds to existing total</p>
+                </div>
+              </div>
+              <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-3">
+                <h4 className="text-blue-400 font-semibold mb-2">✅ Example</h4>
+                <div className="text-gray-300 text-xs space-y-1">
+                  <p>10:00 AM - You submit: <strong>2 rounds</strong> → Total becomes: <strong>2</strong></p>
+                  <p>12:00 PM - You chant 12 more → Submit: <strong>12 rounds</strong> → Total becomes: <strong>14</strong></p>
+                  <p>2:00 PM - You chant 5 more → Submit: <strong>5 rounds</strong> → Total becomes: <strong>19</strong></p>
+                </div>
+              </div>
+              <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-3">
+                <h4 className="text-red-400 font-semibold mb-2">❌ Don't Do This</h4>
+                <div className="text-gray-300 text-xs">
+                  <p>Don't submit your total count - only submit NEW rounds chanted!</p>
+                  <p>If you have 10 total and chant 3 more, submit <strong>3</strong> (not 13)</p>
+                </div>
+              </div>
             </>
           )}
-        </button>
-      </form>
-
-      {/* Messages */}
-      {message.text && (
-        <div className={`mt-4 p-3 rounded-lg ${
-          message.type === 'success' ? 'bg-green-900/20 border border-green-500/50 text-green-400' :
-          message.type === 'warning' ? 'bg-yellow-900/20 border border-yellow-500/50 text-yellow-400' :
-          'bg-red-900/20 border border-red-500/50 text-red-400'
-        }`}>
-          <p className="text-sm text-center">{message.text}</p>
         </div>
-      )}
+      </div>
 
-      {/* Pending submissions indicator */}
-      {pendingSubmissions.length > 0 && (
-        <div className="mt-4 p-3 bg-blue-900/20 border border-blue-500/50 rounded-lg">
-          <p className="text-blue-400 text-sm text-center">
-            📡 {pendingSubmissions.length} submission(s) syncing...
-          </p>
-        </div>
-      )}
+      <div>
+        <h3 className="text-xl font-semibold text-gray-300 mb-4 text-center">
+          {isAdditiveMode ? 'Submit New Chanted Rounds' : 'Update Your Total Chanted Rounds'}
+        </h3>
+        
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label htmlFor="rounds" className="block text-sm font-medium text-gray-300 mb-2">
+              {isAdditiveMode 
+                ? 'Number of NEW rounds chanted:' 
+                : 'Your TOTAL number of rounds chanted:'
+              }
+            </label>
+            <input
+              type="text"
+              id="rounds"
+              value={rounds}
+              onChange={handleInputChange}
+              placeholder={
+                isAdditiveMode 
+                  ? "Enter new rounds (e.g., 5)" 
+                  : "Enter your total rounds (e.g., 14)"
+              }
+              className="input-devotional text-center text-lg font-semibold"
+              disabled={loading}
+              autoComplete="off"
+            />
+            <div className="mt-2 text-xs space-y-1">
+              <p className="text-gray-400 text-center">
+                Current total: <strong>{user?.chantCount || 0}</strong> rounds
+              </p>
+              {!isAdditiveMode && rounds && parseInt(rounds) !== (user?.chantCount || 0) && (
+                <p className={`font-semibold text-center ${
+                  parseInt(rounds) > (user?.chantCount || 0) 
+                    ? 'text-green-400' 
+                    : 'text-yellow-400'
+                }`}>
+                  Change: {parseInt(rounds) > (user?.chantCount || 0) ? '+' : ''}{parseInt(rounds) - (user?.chantCount || 0)} rounds
+                </p>
+              )}
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading || !rounds.trim() || (!isAdditiveMode && parseInt(rounds) === (user?.chantCount || 0))}
+            className="w-full btn-saffron text-lg py-4 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading ? (
+              <span className="flex items-center justify-center">
+                <div className="spinner mr-2"></div>
+                Submitting...
+              </span>
+            ) : (
+              <>
+                {isAdditiveMode ? `➕ Add ${rounds || '...'} Rounds` : `🔄 Update to ${rounds || '...'} Rounds`}
+              </>
+            )}
+          </button>
+        </form>
+
+        {/* Messages */}
+        {message.text && (
+          <div className={`mt-4 p-3 rounded-lg ${
+            message.type === 'success' ? 'bg-green-900/20 border border-green-500/50 text-green-400' :
+            message.type === 'warning' ? 'bg-yellow-900/20 border border-yellow-500/50 text-yellow-400' :
+            'bg-red-900/20 border border-red-500/50 text-red-400'
+          }`}>
+            <p className="text-sm text-center">{message.text}</p>
+          </div>
+        )}
+
+        {/* Pending submissions indicator */}
+        {pendingSubmissions.length > 0 && (
+          <div className="mt-4 p-3 bg-blue-900/20 border border-blue-500/50 rounded-lg">
+            <p className="text-blue-400 text-sm text-center">
+              📡 {pendingSubmissions.length} submission(s) syncing...
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
