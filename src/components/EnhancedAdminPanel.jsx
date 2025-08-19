@@ -12,17 +12,158 @@ import {
   getEventsHistory,
   getCurrentEvent,
   DEV_MODE,
-  ADMIN_PHONE
+  ADMIN_PHONE,
+  // ✅ ADD: Import Firebase functions for delete
+  db,
+  USERS_COLLECTION
 } from '../services/firebase';
+
+// ✅ ADD: Firebase delete import
+import { doc, deleteDoc } from 'firebase/firestore';
+
+// ✅ ADD: Import swipe functionality
+import { useSwipeable } from 'react-swipeable';
+
+// ✅ NEW: Swipeable Participant Row Component
+const SwipeableParticipantRow = ({ participant, onCall, onDelete, isSelected, onSelect, showCheckbox }) => {
+  const [isSwipeOpen, setIsSwipeOpen] = useState(false);
+  const [swipeDirection, setSwipeDirection] = useState(null);
+
+  const handlers = useSwipeable({
+    onSwipedLeft: () => {
+      setSwipeDirection('delete');
+      setIsSwipeOpen(true);
+    },
+    onSwipedRight: () => {
+      setSwipeDirection('call');
+      setIsSwipeOpen(true);
+    },
+    onTap: () => {
+      setIsSwipeOpen(false);
+      setSwipeDirection(null);
+    },
+    preventDefaultTouchmoveEvent: true,
+    trackMouse: true
+  });
+
+  const handleAction = () => {
+    if (swipeDirection === 'call') {
+      onCall(participant);
+    } else if (swipeDirection === 'delete') {
+      onDelete(participant.id);
+    }
+    setIsSwipeOpen(false);
+    setSwipeDirection(null);
+  };
+
+  return (
+    <div 
+      {...handlers}
+      className="relative overflow-hidden bg-gray-800/50 rounded-lg shadow-sm border border-gray-600/50 mb-2"
+    >
+      {/* Main Content */}
+      <div 
+        className={`flex items-center p-4 transition-transform duration-200 ${
+          isSwipeOpen 
+            ? swipeDirection === 'call' 
+              ? 'transform translate-x-16' 
+              : 'transform -translate-x-16'
+            : ''
+        }`}
+      >
+        {/* Desktop Multi-Select Checkbox */}
+        {showCheckbox && (
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={(e) => onSelect(participant.id, e.target.checked)}
+            className="mr-3 hidden md:block"
+          />
+        )}
+        
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center">
+            <h4 className="font-medium text-white truncate">{participant.fullName}</h4>
+            {/* Role Badge */}
+            {participant.role === 'DEVOTEE' && (
+              <span className="ml-2 px-2 py-1 bg-orange-500/20 text-orange-300 text-xs rounded">
+                Devotee
+              </span>
+            )}
+          </div>
+          <p className="text-sm text-gray-400">{participant.phone}</p>
+          <div className="flex items-center space-x-4 text-xs text-gray-500">
+            <span>{participant.chantCount} rounds</span>
+            <span>{(participant.chantCount * 1728).toLocaleString()} names</span>
+            {participant.lastUpdated && (
+              <span>
+                Active: {new Date(participant.lastUpdated.toDate()).toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })}
+              </span>
+            )}
+          </div>
+        </div>
+        
+        {/* Desktop Action Buttons */}
+        <div className="hidden md:flex space-x-2 flex-shrink-0">
+          <button
+            onClick={() => onCall(participant)}
+            className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded text-sm transition-colors"
+            title="Call Participant"
+          >
+            📞
+          </button>
+          <button
+            onClick={() => onDelete(participant.id)}
+            className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded text-sm transition-colors"
+            title="Delete Participant"
+          >
+            🗑️
+          </button>
+        </div>
+      </div>
+
+      {/* Mobile Swipe Action Indicators */}
+      {isSwipeOpen && (
+        <>
+          {swipeDirection === 'call' && (
+            <div 
+              className="absolute left-0 top-0 h-full w-16 bg-green-600 flex items-center justify-center cursor-pointer md:hidden z-10"
+              onClick={handleAction}
+            >
+              <span className="text-white text-2xl">📞</span>
+            </div>
+          )}
+          
+          {swipeDirection === 'delete' && (
+            <div 
+              className="absolute right-0 top-0 h-full w-16 bg-red-600 flex items-center justify-center cursor-pointer md:hidden z-10"
+              onClick={handleAction}
+            >
+              <span className="text-white text-2xl">🗑️</span>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+};
 
 const EnhancedAdminPanel = ({ eventSettings }) => {
   const { user } = useAuth();
   const [globalCount, setGlobalCount] = useState(0);
   const [participants, setParticipants] = useState([]);
   const [eventsHistory, setEventsHistory] = useState([]);
-  const [currentView, setCurrentView] = useState('dashboard'); // dashboard, create, history
+  const [currentView, setCurrentView] = useState('dashboard'); // dashboard, create, history, participants
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
+
+  // ✅ NEW: Participant management state
+  const [selectedParticipants, setSelectedParticipants] = useState(new Set());
+  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
+  const [participantFilter, setParticipantFilter] = useState('all'); // all, active, inactive
 
   // New event form state
   const [newEventForm, setNewEventForm] = useState({
@@ -37,7 +178,6 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
     const unsubscribeCount = subscribeToGlobalCount(setGlobalCount);
     const unsubscribeLeaderboard = subscribeToLeaderboard(setParticipants);
 
-    // Load events history
     loadEventsHistory();
 
     return () => {
@@ -58,7 +198,129 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
     setTimeout(() => setMessage({ type: '', text: '' }), 5000);
   };
 
-  // Event control handlers
+  // ✅ NEW: Call participant function
+  const handleCallParticipant = (participant) => {
+    try {
+      // Clean the number (remove any spaces, dashes, special characters)
+      const cleanNumber = participant.phone.replace(/\D/g, '');
+      
+      // Format for calling - append +91 if needed
+      const callNumber = cleanNumber.startsWith('91') && cleanNumber.length === 12
+        ? `+${cleanNumber}` 
+        : `+91${cleanNumber}`;
+      
+      // Make the call
+      window.open(`tel:${callNumber}`);
+      
+      showMessage('success', `📞 Calling ${participant.fullName} at ${callNumber}`);
+      console.log(`Calling ${participant.fullName} at ${callNumber}`);
+    } catch (error) {
+      showMessage('error', 'Failed to initiate call');
+      console.error('Call error:', error);
+    }
+  };
+
+  // ✅ NEW: Delete participant function
+  const handleDeleteParticipant = async (participantId) => {
+    const participant = participants.find(p => p.id === participantId);
+    if (!participant) return;
+
+    if (window.confirm(`Are you sure you want to delete "${participant.fullName}"?\n\nThis action cannot be undone.`)) {
+      try {
+        setLoading(true);
+        
+        // Delete from Firebase
+        await deleteDoc(doc(db, USERS_COLLECTION, participantId));
+        
+        showMessage('success', `🗑️ Deleted ${participant.fullName} successfully`);
+        console.log(`Deleted participant: ${participant.fullName}`);
+        
+        // Remove from selected if it was selected
+        if (selectedParticipants.has(participantId)) {
+          const newSelected = new Set(selectedParticipants);
+          newSelected.delete(participantId);
+          setSelectedParticipants(newSelected);
+        }
+        
+      } catch (error) {
+        showMessage('error', `Failed to delete ${participant.fullName}: ${error.message}`);
+        console.error('Delete error:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
+  // ✅ NEW: Multi-select functions
+  const handleSelectParticipant = (participantId, isSelected) => {
+    const newSelected = new Set(selectedParticipants);
+    if (isSelected) {
+      newSelected.add(participantId);
+    } else {
+      newSelected.delete(participantId);
+    }
+    setSelectedParticipants(newSelected);
+  };
+
+  const handleMultiDelete = async () => {
+    if (selectedParticipants.size === 0) return;
+
+    const selectedNames = Array.from(selectedParticipants)
+      .map(id => participants.find(p => p.id === id)?.fullName)
+      .filter(Boolean);
+
+    if (window.confirm(
+      `Delete ${selectedParticipants.size} participants?\n\n${selectedNames.join(', ')}\n\nThis action cannot be undone.`
+    )) {
+      try {
+        setLoading(true);
+        
+        const deletePromises = Array.from(selectedParticipants).map(async (participantId) => {
+          try {
+            await deleteDoc(doc(db, USERS_COLLECTION, participantId));
+            return { id: participantId, success: true };
+          } catch (error) {
+            return { id: participantId, success: false, error };
+          }
+        });
+
+        const results = await Promise.all(deletePromises);
+        const successful = results.filter(r => r.success).length;
+        const failed = results.filter(r => !r.success).length;
+
+        if (successful > 0) {
+          showMessage('success', `🗑️ Successfully deleted ${successful} participants`);
+        }
+        if (failed > 0) {
+          showMessage('error', `Failed to delete ${failed} participants`);
+        }
+
+        // Clear selection
+        setSelectedParticipants(new Set());
+        setIsMultiSelectMode(false);
+
+      } catch (error) {
+        showMessage('error', 'Failed to delete participants');
+        console.error('Multi-delete error:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
+  // ✅ NEW: Filter participants
+  const filteredParticipants = participants.filter(participant => {
+    switch (participantFilter) {
+      case 'active':
+        return participant.chantCount > 0;
+      case 'inactive':
+        return participant.chantCount === 0;
+      default:
+        return true;
+    }
+  });
+
+  // Existing event handler functions...
   const handleStartEvent = async () => {
     if (window.confirm('Start the event now? All users will be able to submit chanted rounds.')) {
       setLoading(true);
@@ -123,33 +385,33 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
     }
   };
 
- const handleArchiveCurrentEvent = async () => {
-  if (window.confirm(
-    'Archive current event?\n\n' +
-    '• Event history will be saved\n' +
-    '• Participant accounts will be preserved\n' + 
-    '• Chant counts will be reset to 0\n' +
-    '• Leaderboard will be cleared\n\n' +
-    'Users can participate in future events with the same accounts.'
-  )) {
-    setLoading(true);
-    const result = await archiveCurrentEvent();
-    if (result.success) {
-      showMessage('success', '📁 Event archived successfully! User accounts preserved, chant counts reset.');
-      loadEventsHistory();
-    } else {
-      showMessage('error', `Failed to archive event: ${result.error}`);
+  const handleArchiveCurrentEvent = async () => {
+    if (window.confirm(
+      'Archive current event?\n\n' +
+      '• Event history will be saved\n' +
+      '• Participant accounts will be preserved\n' +
+      '• Chant counts will be reset to 0\n' +
+      '• Leaderboard will be cleared\n\n' +
+      'Users can participate in future events with the same accounts.'
+    )) {
+      setLoading(true);
+      const result = await archiveCurrentEvent();
+      if (result.success) {
+        showMessage('success', '📁 Event archived successfully! User accounts preserved, chant counts reset.');
+        loadEventsHistory();
+      } else {
+        showMessage('error', `Failed to archive event: ${result.error}`);
+      }
+      setLoading(false);
     }
-    setLoading(false);
-  }
-};
+  };
 
   const activeParticipants = participants.filter(p => p.chantCount > 0);
   const progressPercentage = eventSettings?.globalGoal ? 
     ((globalCount / eventSettings.globalGoal) * 100).toFixed(1) : 0;
 
-  const eventStatus = eventSettings?.eventActive ? 'Active' : 
-                    eventSettings?.status === 'completed' ? 'Completed' : 'Stopped';
+  const eventStatus = eventSettings?.eventActive ? 'Active' :
+                     eventSettings?.status === 'completed' ? 'Completed' : 'Stopped';
 
   return (
     <div className="space-y-6">
@@ -159,31 +421,21 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
           <h2 className="text-2xl font-bold text-red-400 mb-2 sm:mb-0">
             🔧 Advanced Event Manager
           </h2>
-          <div className="flex space-x-2">
-            <button
-              onClick={() => setCurrentView('dashboard')}
-              className={`px-3 py-1 rounded text-sm transition-colors ${
-                currentView === 'dashboard' ? 'bg-saffron-500 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
-            >
-              Dashboard
-            </button>
-            <button
-              onClick={() => setCurrentView('create')}
-              className={`px-3 py-1 rounded text-sm transition-colors ${
-                currentView === 'create' ? 'bg-saffron-500 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
-            >
-              Create Event
-            </button>
-            <button
-              onClick={() => setCurrentView('history')}
-              className={`px-3 py-1 rounded text-sm transition-colors ${
-                currentView === 'history' ? 'bg-saffron-500 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
-            >
-              History
-            </button>
+          <div className="flex flex-wrap gap-2">
+            {['dashboard', 'participants', 'create', 'history'].map((view) => (
+              <button
+                key={view}
+                onClick={() => setCurrentView(view)}
+                className={`px-3 py-1 rounded text-sm transition-colors ${
+                  currentView === view 
+                    ? 'bg-saffron-500 text-white' 
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+              >
+                {view === 'participants' ? '👥 Participants' : 
+                 view.charAt(0).toUpperCase() + view.slice(1)}
+              </button>
+            ))}
           </div>
         </div>
         
@@ -203,8 +455,95 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
         </div>
       </div>
 
-      
+      {/* ✅ NEW: Participants Management View */}
+      {currentView === 'participants' && (
+        <div className="space-y-6">
+          {/* Participant Controls */}
+          <div className="card-devotional">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+              <h3 className="text-xl font-semibold text-gray-300">
+                👥 Participant Management ({filteredParticipants.length})
+              </h3>
+              
+              {/* Desktop Controls */}
+              <div className="flex flex-wrap gap-2">
+                {/* Filter Buttons */}
+                <div className="flex bg-gray-800 rounded-lg overflow-hidden">
+                  {['all', 'active', 'inactive'].map((filter) => (
+                    <button
+                      key={filter}
+                      onClick={() => setParticipantFilter(filter)}
+                      className={`px-3 py-1 text-sm transition-colors ${
+                        participantFilter === filter
+                          ? 'bg-saffron-500 text-white'
+                          : 'text-gray-300 hover:text-white hover:bg-gray-700'
+                      }`}
+                    >
+                      {filter === 'all' ? 'All' : 
+                       filter === 'active' ? 'Active' : 'Inactive'}
+                    </button>
+                  ))}
+                </div>
 
+                {/* Multi-Select Toggle */}
+                <button
+                  onClick={() => {
+                    setIsMultiSelectMode(!isMultiSelectMode);
+                    setSelectedParticipants(new Set());
+                  }}
+                  className={`px-4 py-1 rounded text-sm transition-colors hidden md:block ${
+                    isMultiSelectMode 
+                      ? 'bg-blue-500 text-white' 
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                >
+                  {isMultiSelectMode ? 'Cancel Selection' : 'Multi Select'}
+                </button>
+                
+                {/* Multi Delete Button */}
+                {isMultiSelectMode && selectedParticipants.size > 0 && (
+                  <button
+                    onClick={handleMultiDelete}
+                    disabled={loading}
+                    className="px-4 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm transition-colors disabled:opacity-50"
+                  >
+                    🗑️ Delete Selected ({selectedParticipants.size})
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Mobile Instructions */}
+            <div className="md:hidden mb-4 p-3 bg-gray-800/50 rounded-lg text-sm text-gray-400">
+              📱 <strong>Mobile:</strong> Swipe right to call, swipe left to delete
+            </div>
+
+            {/* Participants List */}
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {filteredParticipants.length === 0 ? (
+                <div className="text-center py-8 text-gray-400">
+                  <p>No participants found for "{participantFilter}" filter.</p>
+                </div>
+              ) : (
+                filteredParticipants.map(participant => (
+                  <SwipeableParticipantRow
+                    key={participant.id}
+                    participant={participant}
+                    onCall={handleCallParticipant}
+                    onDelete={handleDeleteParticipant}
+                    isSelected={selectedParticipants.has(participant.id)}
+                    onSelect={handleSelectParticipant}
+                    showCheckbox={isMultiSelectMode}
+                  />
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Existing Dashboard, Create, and History views remain the same... */}
+      
       {/* Dashboard View */}
       {currentView === 'dashboard' && (
         <>
@@ -291,7 +630,7 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
         </>
       )}
 
-      {/* Create New Event View */}
+      {/* Create New Event View - keeping existing code... */}
       {currentView === 'create' && (
         <div className="card-devotional">
           <h3 className="text-xl font-semibold text-gray-300 mb-4">Create New Event</h3>
@@ -389,7 +728,7 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
         </div>
       )}
 
-      {/* Events History View */}
+      {/* Events History View - keeping existing code... */}
       {currentView === 'history' && (
         <div className="card-devotional">
           <h3 className="text-xl font-semibold text-gray-300 mb-4">Events History</h3>
