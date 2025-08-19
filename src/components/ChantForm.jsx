@@ -1,15 +1,20 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext'; // ✅ Fixed path
-import { updateUserChantCount, setUserTotalChantCount } from '../services/firebase.js';
+import { updateUserChantCount, setUserTotalChantCount, subscribeToUserChantCount } from '../services/firebase.js';
 import { validateChantRounds } from '../utils/validation.js';
 
 const ChantForm = () => {
   const { user, updateUserChantCount: updateAuthUser } = useAuth();
+  const [userChantCount, setUserChantCount] = useState(user?.chantCount  || 0); // ✅ Add this line
   const [rounds, setRounds] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [pendingSubmissions, setPendingSubmissions] = useState([]);
   const [isAdditiveMode, setIsAdditiveMode] = useState(false); // ✅ NEW: Toggle between modes
+
+
+  
+
 
   const clearMessage = () => {
     setTimeout(() => {
@@ -29,9 +34,9 @@ const ChantForm = () => {
     }
 
     // Additional validation for replacement mode
-    if (!isAdditiveMode && validation.rounds < (user?.chantCount || 0)) {
+    if (!isAdditiveMode && validation.rounds < (userChantCount  || 0)) {
       const confirmDecrease = window.confirm(
-        `This will decrease your count from ${user?.chantCount || 0} to ${validation.rounds}. Are you sure?`
+        `This will decrease your count from ${userChantCount  || 0} to ${validation.rounds}. Are you sure?`
       );
       if (!confirmDecrease) return;
     }
@@ -45,7 +50,7 @@ const ChantForm = () => {
       if (isAdditiveMode) {
         // ✅ ADDITIVE MODE: Add new rounds to existing total
         result = await updateUserChantCount(user.id, validation.rounds);
-        newTotal = (user?.chantCount || 0) + validation.rounds;
+        newTotal = (userChantCount  || 0) + validation.rounds;
       } else {
         // ✅ REPLACEMENT MODE: Set total to the entered number
         result = await setUserTotalChantCount(user.id, validation.rounds);
@@ -59,10 +64,10 @@ const ChantForm = () => {
         const successMessage = isAdditiveMode
           ? `✅ Added ${validation.rounds} rounds! Your total: ${newTotal}`
           : `✅ Updated to ${newTotal} total rounds! ${
-              validation.rounds > (user?.chantCount || 0) 
-                ? `(+${validation.rounds - (user?.chantCount || 0)})` 
-                : validation.rounds < (user?.chantCount || 0)
-                  ? `(${validation.rounds - (user?.chantCount || 0)})`
+              validation.rounds > (userChantCount  || 0) 
+                ? `(+${validation.rounds - (userChantCount  || 0)})` 
+                : validation.rounds < (userChantCount  || 0)
+                  ? `(${validation.rounds - (userChantCount  || 0)})`
                   : ''
             }`;
 
@@ -98,6 +103,17 @@ const ChantForm = () => {
     }
   };
 
+  // ✅ NEW: Subscribe to real-time user chant count updates
+useEffect(() => {
+  if (!user?.id) return;
+
+  const unsubscribeUser = subscribeToUserChantCount(user.id, (chantCount) => {
+    setUserChantCount(chantCount);
+  });
+
+  return () => unsubscribeUser();
+}, [user?.id]);
+
   const retrySubmission = async (submission) => {
     try {
       let result;
@@ -105,7 +121,7 @@ const ChantForm = () => {
 
       if (submission.isAdditive) {
         result = await updateUserChantCount(user.id, submission.rounds);
-        newTotal = (user?.chantCount || 0) + submission.rounds;
+        newTotal = (userChantCount  || 0) + submission.rounds;
       } else {
         result = await setUserTotalChantCount(user.id, submission.rounds);
         newTotal = submission.rounds;
@@ -132,6 +148,7 @@ const ChantForm = () => {
       setTimeout(() => retrySubmission(submission), 10000);
     }
   };
+  
 
   const handleInputChange = (e) => {
     const value = e.target.value;
@@ -191,7 +208,7 @@ const ChantForm = () => {
               <div className="bg-gray-800/50 rounded-lg p-3">
                 <h4 className="text-saffron-400 font-semibold mb-2">🔢 Update Total Mode (Recommended)</h4>
                 <div className="text-gray-300 space-y-1">
-                  <p>• <strong>Current total:</strong> {user?.chantCount || 0} rounds</p>
+                  <p>• <strong>Current total:</strong> {userChantCount} rounds</p>
                   <p>• <strong>Enter:</strong> Your NEW total number of rounds chanted</p>
                   <p>• <strong>System:</strong> Will UPDATE your total to this number</p>
                 </div>
@@ -217,7 +234,7 @@ const ChantForm = () => {
               <div className="bg-gray-800/50 rounded-lg p-3">
                 <h4 className="text-saffron-400 font-semibold mb-2">🔢 Add New Rounds Mode</h4>
                 <div className="text-gray-300 space-y-1">
-                  <p>• <strong>Current total:</strong> {user?.chantCount || 0} rounds</p>
+                  <p>• <strong>Current total:</strong> {userChantCount  || 0} rounds</p>
                   <p>• <strong>Submit:</strong> Only the NEW rounds you just chanted</p>
                   <p>• <strong>System:</strong> Will ADD your new rounds to existing total</p>
                 </div>
@@ -271,15 +288,15 @@ const ChantForm = () => {
             />
             <div className="mt-2 text-xs space-y-1">
               <p className="text-gray-400 text-center">
-                Current total: <strong>{user?.chantCount || 0}</strong> rounds
+                Current total: <strong>{userChantCount  || 0}</strong> rounds
               </p>
-              {!isAdditiveMode && rounds && parseInt(rounds) !== (user?.chantCount || 0) && (
+              {!isAdditiveMode && rounds && parseInt(rounds) !== (userChantCount  || 0) && (
                 <p className={`font-semibold text-center ${
-                  parseInt(rounds) > (user?.chantCount || 0) 
+                  parseInt(rounds) > (userChantCount  || 0) 
                     ? 'text-green-400' 
                     : 'text-yellow-400'
                 }`}>
-                  Change: {parseInt(rounds) > (user?.chantCount || 0) ? '+' : ''}{parseInt(rounds) - (user?.chantCount || 0)} rounds
+                  Change: {parseInt(rounds) > (userChantCount  || 0) ? '+' : ''}{parseInt(rounds) - (userChantCount  || 0)} rounds
                 </p>
               )}
             </div>
@@ -287,7 +304,7 @@ const ChantForm = () => {
 
           <button
             type="submit"
-            disabled={loading || !rounds.trim() || (!isAdditiveMode && parseInt(rounds) === (user?.chantCount || 0))}
+            disabled={loading || !rounds.trim() || (!isAdditiveMode && parseInt(rounds) === (userChantCount  || 0))}
             className="w-full btn-saffron text-lg py-4 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? (

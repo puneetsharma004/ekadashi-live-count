@@ -3,15 +3,16 @@ import { useAuth } from '../context/AuthContext'; // ✅ Fixed path (contexts, n
 import ChantForm from '../components/ChantForm';
 import ProgressBar from '../components/ProgressBar';
 import Leaderboard from '../components/Leaderboard';
-import { subscribeToGlobalCount, isAdmin } from '../services/firebase.js'; // ✅ Removed old imports
+import { subscribeToGlobalCount, isAdmin, subscribeToUserChantCount } from '../services/firebase.js'; // ✅ Add new function
 import { useEventSettings } from '../hooks/useEventSettings'; // ✅ Add this import
 import EnhancedAdminPanel from '../components/EnhancedAdminPanel';
 
 const Home = ({ eventSettings: propEventSettings }) => { // ✅ Accept eventSettings as prop
-  const { user } = useAuth();
+  const { user } = useAuth(); // ✅ Add updateUser
   const [globalCount, setGlobalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showAdmin, setShowAdmin] = useState(false);
+  const [userChantCount, setUserChantCount] = useState(user?.chantCount || 0); // ✅ Add local state
   
   // ✅ Use hook for event settings if not provided as prop
   const { settings: hookEventSettings, loading: settingsLoading } = useEventSettings();
@@ -29,6 +30,20 @@ const Home = ({ eventSettings: propEventSettings }) => { // ✅ Accept eventSett
 
     return () => unsubscribe();
   }, []);
+
+  // ✅ NEW: Subscribe to real-time user chant count updates
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const unsubscribeUser = subscribeToUserChantCount(user.id, (chantCount) => {
+      console.log('🔄 User chant count updated:', chantCount);
+      setUserChantCount(chantCount);
+      // Also update the AuthContext to keep it in sync
+      // updateUser({ ...user, chantCount: chantCount });
+    });
+
+    return () => unsubscribeUser();
+  }, [user?.id]);
 
   // ✅ Use dynamic goal from eventSettings
   const globalGoal = eventSettings?.globalGoal || 666;
@@ -132,12 +147,19 @@ const Home = ({ eventSettings: propEventSettings }) => { // ✅ Accept eventSett
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="card-devotional text-center">
           <h3 className="text-lg font-semibold text-gray-300 mb-2">
-            Your Chant Count
+            Your Chanted Rounds
           </h3>
+          {/* ✅ FIXED: Use real-time userChantCount instead of static user.chantCount */}
           <div className="text-4xl font-bold text-saffron-400 glow-saffron">
-            {user?.chantCount || 0}
+            {userChantCount}
           </div>
           <p className="text-gray-400 text-sm mt-2">rounds completed</p>
+          
+          {/* ✅ NEW: Show update indicator when count changes */}
+          {userChantCount !== (user?.chantCount || 0) && (
+            <p className="text-green-400 text-xs mt-1 animate-pulse">
+              ✅ Updated in real-time
+            </p>)}
         </div>
 
         <div className="card-devotional text-center">

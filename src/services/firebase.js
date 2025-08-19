@@ -546,6 +546,25 @@ export const subscribeToGlobalCount = (callback) => {
   });
 };
 
+// ✅ NEW: Subscribe to real-time updates for a specific user's chant count
+export const subscribeToUserChantCount = (userId, callback) => {
+  const userRef = doc(db, USERS_COLLECTION, userId);
+  
+  return onSnapshot(userRef, (docSnap) => {
+    if (docSnap.exists()) {
+      const userData = docSnap.data();
+      callback(userData.chantCount || 0);
+    } else {
+      // User document doesn't exist, return 0
+      callback(0);
+    }
+  }, (error) => {
+    console.error('Error listening to user chant count:', error);
+    callback(0); // Fallback to 0 on error
+  });
+};
+
+
 // ===== ADMIN AUTHENTICATION =====
 
 export const authenticateAdmin = (phone, password) => {

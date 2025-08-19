@@ -250,7 +250,7 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
           {/* Real-time Stats */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="card-devotional text-center">
-              <h3 className="text-lg font-semibold text-gray-300 mb-2">Global Count</h3>
+              <h3 className="text-lg font-semibold text-gray-300 mb-2">Collective Count</h3>
               <div className="text-3xl font-bold text-saffron-400">{globalCount}</div>
               <div className="text-sm text-gray-400">of {eventSettings?.globalGoal || 666}</div>
             </div>
