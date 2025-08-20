@@ -11,6 +11,20 @@ const EventSection = ({
   setShowAdmin 
 }) => {
 
+  const prevCountRef = useRef(globalCount);
+
+  useEffect(() => {
+    const canVibrate = 'vibrate' in navigator;
+    const countIncreased = globalCount > prevCountRef.current;
+
+    if (canVibrate && countIncreased) {
+      /* 15 ms is almost imperceptible on watches; 35-40 ms feels like
+         a soft ’tick’ on phones. Keep it <50 ms so long chants aren’t annoying. */
+      navigator.vibrate(35);
+    }
+
+    prevCountRef.current = globalCount;
+  }, [globalCount]);
   
   return (
     <div className="space-y-6">
