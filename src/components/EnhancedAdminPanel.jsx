@@ -137,13 +137,13 @@ const SwipeableParticipantRow = ({ participant, onCall, onDelete, isSelected, on
         navigator.vibrate(50);
       }
     },
-    onTap: () => {
-      if (isSwipeOpen) {
-        console.log('Tap to close swipe');
-        setIsSwipeOpen(false);
-        setSwipeDirection(null);
-      }
-    },
+    // onTap: () => {
+    //   if (isSwipeOpen) {
+    //     console.log('Tap to close swipe');
+    //     setIsSwipeOpen(false);
+    //     setSwipeDirection(null);
+    //   }
+    // },
     preventScrollOnSwipe: true,
     trackMouse: false, // Disable mouse tracking for desktop
     delta: 50,           // Reduced minimum swipe distance for easier triggering
@@ -184,9 +184,17 @@ const SwipeableParticipantRow = ({ participant, onCall, onDelete, isSelected, on
     }
   };
 
-  // ✅ ADDED: Close swipe on outside tap
+  // ✅ IMPROVED: Only close swipe when clicking on main content, not action buttons
   const handleMainContentClick = (e) => {
-    if (isSwipeOpen && !e.target.closest('.swipe-action')) {
+    // Don't close if clicking on action buttons
+    if (e.target.closest('.swipe-action-button')) {
+      console.log('Clicked on action button - not closing swipe');
+      return;
+    }
+    
+    // Only close if swipe is open and clicking on main content
+    if (isSwipeOpen) {
+      console.log('Closing swipe - clicked on main content');
       setIsSwipeOpen(false);
       setSwipeDirection(null);
     }
@@ -207,6 +215,7 @@ const SwipeableParticipantRow = ({ participant, onCall, onDelete, isSelected, on
               : 'transform -translate-x-16'
             : ''
         }`}
+        onClick={handleMainContentClick}
       >
         {/* Desktop Multi-Select Checkbox */}
         {showCheckbox && (
