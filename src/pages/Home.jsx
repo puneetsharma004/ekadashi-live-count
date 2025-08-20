@@ -96,6 +96,9 @@ const Home = ({ eventSettings: propEventSettings }) => {
           user={user}
           eventSettings={eventSettings}
           userChantCount={userChantCount}
+          globalCount={globalCount}        // ❌ Missing
+          globalGoal={globalGoal}          // ❌ Missing
+          progressPercentage={progressPercentage} // ❌ Missing
         />
       </div>
       
@@ -127,6 +130,9 @@ const Home = ({ eventSettings: propEventSettings }) => {
           user={user}
           eventSettings={eventSettings}
           userChantCount={userChantCount}
+          globalCount={globalCount}        // ❌ Missing
+          globalGoal={globalGoal}          // ❌ Missing
+          progressPercentage={progressPercentage} // ❌ Missing
         />
       )}
       

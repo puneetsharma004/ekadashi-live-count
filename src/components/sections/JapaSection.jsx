@@ -1,4 +1,4 @@
-import React from 'react';
+
 import ChantForm from '../ChantForm';
 
 const JapaSection = ({ user, eventSettings, userChantCount, globalCount, globalGoal, progressPercentage }) => {
@@ -9,12 +9,20 @@ const JapaSection = ({ user, eventSettings, userChantCount, globalCount, globalG
   const safeProgressPercentage = progressPercentage || 0;
   
   // ✅ SAFE: Calculate contribution percentage with proper error handling
-  const contributionPercentage = (safeGlobalCount > 0) 
-    ? ((safeUserChantCount / safeGlobalCount) * 100).toFixed(1)
+  const contributionPercentage = (safeGlobalGoal  > 0) 
+    ? ((safeUserChantCount / safeGlobalGoal ) * 100).toFixed(1)
     : '0.0';
   
   // ✅ SAFE: Calculate holy names
   const holyNames = safeUserChantCount * 1728;
+
+  // ✅ FIXED: Calculate actual progress percentage if not provided correctly
+  const actualProgressPercentage = (safeGlobalGoal > 0) 
+    ? Math.min((safeGlobalCount / safeGlobalGoal) * 100, 100)
+    : 0;
+
+  // Use the calculated progress if the passed one seems incorrect
+  const displayProgressPercentage = (safeProgressPercentage > 0) ? safeProgressPercentage : actualProgressPercentage;
 
   return (
     <div className="space-y-6">
@@ -69,11 +77,12 @@ const JapaSection = ({ user, eventSettings, userChantCount, globalCount, globalG
               background: `conic-gradient(
                 from 0deg,
                 #f59e0b 0deg,
-                #f59e0b ${Math.min((safeProgressPercentage / 100) * 360, 360)}deg,
-                transparent ${Math.min((safeProgressPercentage / 100) * 360, 360)}deg,
+                #f59e0b ${Math.min((displayProgressPercentage  / 100) * 360, 360)}deg,
+                transparent ${Math.min((displayProgressPercentage  / 100) * 360, 360)}deg,
                 transparent 360deg
               )`,
               padding: '3px',
+              borderRadius: '0.5rem'
             }}
           >
             <div className="w-full h-full bg-gray-800 rounded-lg"></div>
@@ -91,15 +100,33 @@ const JapaSection = ({ user, eventSettings, userChantCount, globalCount, globalG
             </div>
             <p className="text-gray-400 text-xs mt-1">Completed</p>
             
-            {/* ✅ SAFE: Progress Percentage */}
+            {/* ✅ FIXED: Progress Percentage - Shows even when >100% */}
             <div className="mt-2">
-              <span className="text-xs font-bold text-saffron-400">
-                {safeProgressPercentage.toFixed(1)}%
+              <span className={`text-xs font-bold ${displayProgressPercentage >= 100 ? 'text-green-400' : 'text-saffron-400'}`}>
+                {displayProgressPercentage.toFixed(1)}%
               </span>
             </div>
           </div>
         </div>
       </div>
+
+      {/* ✅ NEW: Event Completion Status */}
+      {eventSettings?.status === 'completed' && (
+        <div className="card-devotional bg-gradient-to-r from-green-900/20 to-green-800/10 border-green-500/30 text-center">
+          <div className="mb-3">
+            <span className="text-4xl">🏆</span>
+          </div>
+          <h3 className="text-lg font-semibold text-green-400 mb-2">
+            Event Completed!
+          </h3>
+          <p className="text-gray-300 text-sm mb-2">
+            Your contribution: <span className="font-bold text-devotional-gold">{contributionPercentage}%</span>
+          </p>
+          <p className="text-gray-400 text-xs">
+            Total rounds achieved: {safeGlobalCount.toLocaleString()} / {safeGlobalGoal.toLocaleString()}
+          </p>
+        </div>
+      )}
 
       {/* Chant Form */}
       {eventSettings?.eventActive === true && eventSettings?.status === 'active' ? (
