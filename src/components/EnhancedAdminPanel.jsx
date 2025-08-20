@@ -231,7 +231,7 @@ const handlers = useSwipeable(swipeOptions);
             )}
           </div>
           <p className="text-sm text-gray-400">{participant.phone}</p>
-          <div className="flex items-center space-x-4 text-xs text-gray-500">
+          <div className="flex items-center justify-between md:justify-start space-x-4 text-xs text-gray-500">
             <span>{participant.chantCount} rounds</span>
             <span>{totalNames} names</span>
             {lastUpdatedTime && (
