@@ -1,7 +1,7 @@
 // Handles auth state, user session
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { getUserByPhone, checkPhoneExists, createUser, isAdmin, authenticateAdmin } from '../services/firebase.js';
-
+import { validatePhoneNumber } from '../utils/validation.js'; // ✅ ADD THIS IMPORT
 const AuthContext = createContext();
 
 
@@ -46,42 +46,45 @@ export const AuthProvider = ({ children }) => {
         throw new Error('Please fill in all fields');
       }
       
-      // Clean phone number (remove spaces, special chars)
-      const cleanPhone = phoneNumber.replace(/\D/g, '');
-      if (cleanPhone.length < 10) {
-        throw new Error('Please enter a valid phone number');
+      // ✅ CHANGED: Use the new validation function
+      const phoneValidation = validatePhoneNumber(phoneNumber);
+      if (!phoneValidation.isValid) {
+        throw new Error(phoneValidation.error);
       }
+      
+      const cleanPhone = phoneValidation.cleanPhone; // This is now 10 digits only
 
       // Check if phone already exists
       const phoneExists = await checkPhoneExists(cleanPhone);
       if (phoneExists) {
         throw new Error('Phone number already registered');
       }
+      
       // Check if admin
       const adminCheck = isAdmin(cleanPhone);
 
       if (adminCheck) {
-      const adminPassword = prompt('Enter admin password:');
-      if (!authenticateAdmin(cleanPhone, adminPassword)) {
-        throw new Error('Invalid admin credentials');
+        const adminPassword = prompt('Enter admin password:');
+        if (!authenticateAdmin(cleanPhone, adminPassword)) {
+          throw new Error('Invalid admin credentials');
+        }
       }
-    }
 
       // Create new user
       const result = await createUser({
         fullName: fullName.trim(),
-        phone: cleanPhone,
-        role: role // ✅ Add role to the user data
+        phone: cleanPhone, // ✅ This is now 10 digits only
+        role: role
       });
 
       if (result.success) {
         const newUser = {
           id: result.id,
           fullName: fullName.trim(),
-          phone: cleanPhone,
+          phone: cleanPhone, // ✅ This is now 10 digits only
           chantCount: 0,
-          role: role, // ✅ Add role to the user object
-          isAdmin: adminCheck  // Add admin flag
+          role: role,
+          isAdmin: adminCheck
         };
         
         // Save to localStorage and state
@@ -101,32 +104,37 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const login = async (phoneNumber) => {
-    setLoading(true);
-    setError(null);
-    
-    try {
-      const cleanPhone = phoneNumber.replace(/\D/g, '');
-      if (cleanPhone.length < 10) {
-        throw new Error('Please enter a valid phone number');
-      }
 
-      const result = await getUserByPhone(cleanPhone);
-      if (result.success) {
-        // Save to localStorage and state
-        localStorage.setItem('ekadashi-user', JSON.stringify(result.user));
-        setUser(result.user);
-        return { success: true };
-      } else {
-        throw new Error('Phone number not found. Please register first.');
-      }
-    } catch (error) {
-      setError(error.message);
-      return { success: false, error: error.message };
-    } finally {
-      setLoading(false);
+  const login = async (phoneNumber) => {
+  setLoading(true);
+  setError(null);
+  
+  try {
+    // ✅ CHANGED: Use the new validation function
+    const phoneValidation = validatePhoneNumber(phoneNumber);
+    if (!phoneValidation.isValid) {
+      throw new Error(phoneValidation.error);
     }
+    
+    const cleanPhone = phoneValidation.cleanPhone; // This is now 10 digits only
+
+    const result = await getUserByPhone(cleanPhone);
+    if (result.success) {
+      // Save to localStorage and state
+      localStorage.setItem('ekadashi-user', JSON.stringify(result.user));
+      setUser(result.user);
+      return { success: true };
+    } else {
+      throw new Error('Phone number not found. Please register first.');
+    }
+  } catch (error) {
+    setError(error.message);
+    return { success: false, error: error.message };
+  } finally {
+    setLoading(false);
+  }
   };
+
 
   const logout = () => {
     localStorage.removeItem('ekadashi-user');

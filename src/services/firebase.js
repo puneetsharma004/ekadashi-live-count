@@ -43,13 +43,14 @@ export const db = getFirestore(app);
 export const DEV_MODE = false;
 
 // Admin credentials - change these!
-export const ADMIN_PHONE = "917483916205";
+export const ADMIN_PHONE = "7483916205";
 export const ADMIN_PASSWORD = "t9X@7fQ1Lp";
 
 // Collection references
 export const USERS_COLLECTION = 'users';
 export const EVENT_SETTINGS_COLLECTION = 'eventSettings';
 export const EVENTS_HISTORY_COLLECTION = 'eventsHistory';
+
 
 // ===== EVENT MANAGEMENT FUNCTIONS =====
 
@@ -426,36 +427,64 @@ export const createUser = async (userData) => {
 
 export const checkPhoneExists = async (phoneNumber) => {
   try {
-    const q = query(
-      collection(db, USERS_COLLECTION), 
-      where("phone", "==", phoneNumber)
-    );
-    const querySnapshot = await getDocs(q);
-    return !querySnapshot.empty;
+    // ✅ CHANGED: Check both formats during transition period
+    const cleanPhone = phoneNumber.replace(/\D/g, '');
+    
+    // Create queries for both possible formats
+    const queries = [
+      // Query for 10-digit format (new format)
+      query(collection(db, USERS_COLLECTION), where("phone", "==", cleanPhone)),
+      // Query for 12-digit format (old format with +91)
+      query(collection(db, USERS_COLLECTION), where("phone", "==", `91${cleanPhone}`)),
+      query(collection(db, USERS_COLLECTION), where("phone", "==", `+91${cleanPhone}`))
+    ];
+    
+    // Check all possible formats
+    for (const q of queries) {
+      const querySnapshot = await getDocs(q);
+      if (!querySnapshot.empty) {
+        return true; // Found user in any format
+      }
+    }
+    
+    return false; // User not found in any format
   } catch (error) {
     console.error('Error checking phone:', error);
     return false;
   }
 };
 
+
 export const getUserByPhone = async (phoneNumber) => {
   try {
-    const q = query(
-      collection(db, USERS_COLLECTION), 
-      where("phone", "==", phoneNumber)
-    );
-    const querySnapshot = await getDocs(q);
+    // ✅ CHANGED: Search both formats during transition period
+    const cleanPhone = phoneNumber.replace(/\D/g, '');
     
-    if (!querySnapshot.empty) {
-      const doc = querySnapshot.docs[0];
-      return { success: true, user: { id: doc.id, ...doc.data() } };
+    // Create queries for both possible formats
+    const queries = [
+      // Query for 10-digit format (new format)
+      query(collection(db, USERS_COLLECTION), where("phone", "==", cleanPhone)),
+      // Query for 12-digit format (old format with +91)
+      query(collection(db, USERS_COLLECTION), where("phone", "==", `91${cleanPhone}`)),
+      query(collection(db, USERS_COLLECTION), where("phone", "==", `+91${cleanPhone}`))
+    ];
+    
+    // Try each format until we find the user
+    for (const q of queries) {
+      const querySnapshot = await getDocs(q);
+      if (!querySnapshot.empty) {
+        const doc = querySnapshot.docs[0];
+        return { success: true, user: { id: doc.id, ...doc.data() } };
+      }
     }
+    
     return { success: false, error: 'User not found' };
   } catch (error) {
     console.error('Error getting user:', error);
     return { success: false, error: error.message };
   }
 };
+
 
 // ✅ NEW: Set user's total chant count (replacement, not additive)
 export const setUserTotalChantCount = async (userId, totalRounds) => {

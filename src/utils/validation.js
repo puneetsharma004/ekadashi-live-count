@@ -1,7 +1,12 @@
 // Input validation utilities
 export const validatePhoneNumber = (phone) => {
   // Remove all non-digits
-  const cleanPhone = phone.replace(/\D/g, '');
+  let cleanPhone = phone.replace(/\D/g, '');
+  
+  // Handle different input formats - remove +91 if present
+  if (cleanPhone.startsWith('91') && cleanPhone.length === 12) {
+    cleanPhone = cleanPhone.slice(2); // Remove the '91' prefix
+  }
   
   // Check if it's exactly 10 digits for Indian mobile numbers
   if (cleanPhone.length !== 10) {
@@ -21,7 +26,8 @@ export const validatePhoneNumber = (phone) => {
   
   return {
     isValid: true,
-    cleanPhone: `+91${cleanPhone}` // CHANGED: Now returns +91 prefix
+    cleanPhone: cleanPhone, // ✅ CHANGED: Now returns only 10 digits for database
+    displayPhone: `+91${cleanPhone}` // ✅ NEW: Formatted version for display
   };
 };
 
@@ -84,12 +90,23 @@ export const validateChantRounds = (rounds) => {
 };
 
 export const formatPhoneDisplay = (phone) => {
-  // Format phone number for display (e.g., +91 98765 43210)
-  if (phone.length === 10) {
-    return `${phone.slice(0, 5)} ${phone.slice(5)}`;
+  // Remove any non-digits first
+  const cleanPhone = phone.replace(/\D/g, '');
+  
+  // Handle both old format (+91xxxxxxxxxx) and new format (xxxxxxxxxx)
+  let displayNumber;
+  if (cleanPhone.length === 12 && cleanPhone.startsWith('91')) {
+    displayNumber = cleanPhone.slice(2); // Remove 91 prefix
+  } else if (cleanPhone.length === 10) {
+    displayNumber = cleanPhone;
+  } else {
+    return phone; // Return as-is if format is unexpected
   }
-  return phone;
+  
+  // Format as: +91 xxxxx xxxxx
+  return `+91 ${displayNumber.slice(0, 5)} ${displayNumber.slice(5)}`;
 };
+
 
 export const getTimeFromNow = (milliseconds) => {
   const seconds = Math.floor(milliseconds / 1000);

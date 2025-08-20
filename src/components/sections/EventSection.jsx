@@ -1,6 +1,4 @@
-import React from 'react';
 import ProgressBar from '../ProgressBar';
-import { BsCalendar2EventFill } from "react-icons/bs";
 const EventSection = ({ 
   user, 
   eventSettings, 
@@ -12,6 +10,8 @@ const EventSection = ({
   userIsAdmin, 
   setShowAdmin 
 }) => {
+
+  
   return (
     <div className="space-y-6">
       {/* Hero Section */}

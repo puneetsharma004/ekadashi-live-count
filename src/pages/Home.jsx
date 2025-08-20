@@ -11,6 +11,7 @@ import JapaSection from '../components/sections/JapaSection';
 import LeaderboardSection from '../components/sections/LeaderboardSection';
 
 const Home = ({ eventSettings: propEventSettings }) => {
+  
   const { user } = useAuth();
   const [globalCount, setGlobalCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -24,6 +25,8 @@ const Home = ({ eventSettings: propEventSettings }) => {
   const eventSettings = propEventSettings || hookEventSettings;
 
   const userIsAdmin = user && isAdmin(user.phone);
+
+  
 
   useEffect(() => {
     const unsubscribe = subscribeToGlobalCount((totalCount) => {
