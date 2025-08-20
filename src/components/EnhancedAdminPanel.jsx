@@ -47,10 +47,11 @@ import {
   IoCallOutline,
   IoPersonOutline 
 } from 'react-icons/io5';
-
+import { RiFileExcel2Line } from "react-icons/ri";
 import 'react-date-picker/dist/DatePicker.css';
 import 'react-time-picker/dist/TimePicker.css';
 import 'react-calendar/dist/Calendar.css';
+import exportParticipantsToExcel from '../utils/exportExcel';
 
 // ✅ OPTIMIZED: Moved constants outside component to prevent re-creation
 const VAISHNAVA_EVENTS = [
@@ -74,6 +75,12 @@ const NAVIGATION_ITEMS = [
   { key: 'create', label: 'Create Event', icon: IoCreate },
   { key: 'history', label: 'History', icon: IoTime }
 ];
+
+const fieldsToExport = [
+                      { key: 'fullName',  label: 'Name' },
+                      { key: 'chantCount', label: 'Rounds' },
+                      { key: 'phone', label: 'Phone' }
+                    ];
 
 // ✅ OPTIMIZED: Memoized SwipeableParticipantRow to prevent unnecessary re-renders
 const SwipeableParticipantRow = React.memo(({ 
@@ -612,6 +619,7 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
       }
     };
   }, [loadEventsHistory]);
+  
 
   return (
     <div className="space-y-6">
@@ -695,13 +703,13 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
                 Participant Management ({filteredParticipants.length})
               </h3>
               
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 justify-between w-full md:w-auto">
                 <div className="flex bg-gray-800 rounded-lg overflow-hidden">
                   {PARTICIPANT_FILTERS.map((filter) => (
                     <button
                       key={filter}
                       onClick={() => setParticipantFilter(filter)}
-                      className={`px-3 py-1 text-sm transition-colors ${
+                      className={`px-3 py-1 text-sm transition-colors outline-none ${
                         participantFilter === filter
                           ? 'bg-saffron-500 text-white'
                           : 'text-gray-300 hover:text-white hover:bg-gray-700'
@@ -718,7 +726,7 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
                     setIsMultiSelectMode(!isMultiSelectMode);
                     setSelectedParticipants(new Set());
                   }}
-                  className={`px-4 py-1 rounded text-sm transition-colors hidden md:flex items-center gap-2 ${
+                  className={`px-4 py-1 rounded text-sm transition-colors hidden md:flex items-center gap-2 outline-none ${
                     isMultiSelectMode 
                       ? 'bg-blue-500 text-white' 
                       : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
@@ -732,12 +740,34 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
                   <button
                     onClick={handleMultiDelete}
                     disabled={loading}
-                    className="px-4 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm transition-colors disabled:opacity-50 flex items-center gap-2"
+                    className="px-4 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm transition-colors disabled:opacity-50 flex items-center gap-2 outline-none"
                   >
                     <IoTrashOutline />
                     Delete Selected ({selectedParticipants.size})
                   </button>
                 )}
+                <button
+                    onClick={() => {
+                    /* 1. Decide which data set you want to export */
+                    const dataset = filteredParticipants;        // current view
+                    /* or: const dataset = somePastEvent.participants */
+
+                    /* 2. Decide which columns admin picked (hard-coded below for demo) */
+                    //fieldsToExport check above
+
+                    /* 3. Call the helper */
+                    exportParticipantsToExcel(
+                      dataset,
+                      eventSettings?.eventName || 'Chanting_Event',
+                      fieldsToExport
+                    );
+                  }}
+                    disabled={loading}
+                    className="px-4 py-1 bg-[#31aa52] hover:bg-[#118135] text-white rounded text-sm transition-colors disabled:opacity-50 flex items-center gap-2 outline-none"
+                  >
+                    <RiFileExcel2Line />
+                     Excel 
+                </button>
               </div>
             </div>
 
