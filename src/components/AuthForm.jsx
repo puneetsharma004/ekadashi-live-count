@@ -114,7 +114,20 @@ const AuthForm = () => {
 
   return (
     <div className="card-devotional w-full max-w-md animate-fade-in text-white overflow-hidden
-      overscroll-none">
+      overscroll-none"
+      style={{
+      // ✅ CSS-in-JS for maximum browser compatibility
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      overflow: 'hidden',
+      overscrollBehavior: 'none',
+      touchAction: 'none', // Prevents all touch scrolling
+      userSelect: 'none'    // Prevents text selection that can cause scrolling
+    }}
+      >
       <div className="text-center mb-6">
         <h1 className="text-3xl font-bold text-gradient-saffron mb-2">
           🙏 Hare Krishna
