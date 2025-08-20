@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { 
   updateEventSettings,
@@ -13,15 +13,11 @@ import {
   getCurrentEvent,
   DEV_MODE,
   ADMIN_PHONE,
-  // ✅ ADD: Import Firebase functions for delete
   db,
   USERS_COLLECTION
 } from '../services/firebase';
 
-// ✅ ADD: Firebase delete import
 import { doc, deleteDoc } from 'firebase/firestore';
-
-// ✅ ADD: Import swipe functionality
 import { useSwipeable } from 'react-swipeable';
 
 import { 
@@ -33,13 +29,11 @@ import {
   IoStatsChart,
   IoPeople,
   IoTrophy,
-  // ✅ NEW: Navigation and header icons
   IoGrid,
   IoCreate,
   IoTime,
   IoSettings,
   IoShieldCheckmark,
-  // ✅ NEW: Form icons
   IoCalendar,
   IoText,
   IoPrism,
@@ -54,12 +48,11 @@ import {
   IoPersonOutline 
 } from 'react-icons/io5';
 
-// ✅ ADD: Import date/time pickers and additional icons
 import 'react-date-picker/dist/DatePicker.css';
 import 'react-time-picker/dist/TimePicker.css';
 import 'react-calendar/dist/Calendar.css';
 
-// ✅ NEW: Vaishnava Calendar Data (Ekadashi dates for 2025)
+// ✅ OPTIMIZED: Moved constants outside component to prevent re-creation
 const VAISHNAVA_EVENTS = [
   { date: '2025-01-13', title: 'Saphala Ekadashi', type: 'ekadashi' },
   { date: '2025-01-29', title: 'Putrada Ekadashi', type: 'ekadashi' },
@@ -72,107 +65,66 @@ const VAISHNAVA_EVENTS = [
   { date: '2025-04-28', title: 'Kamada Ekadashi', type: 'ekadashi' },
   { date: '2025-05-12', title: 'Varuthini Ekadashi', type: 'ekadashi' },
   { date: '2025-05-27', title: 'Mohini Ekadashi', type: 'ekadashi' },
-  // Add more dates as needed...
 ];
 
-// ✅ NEW: Swipeable Participant Row Component
+const PARTICIPANT_FILTERS = ['all', 'active', 'inactive'];
+const NAVIGATION_ITEMS = [
+  { key: 'dashboard', label: 'Dashboard', icon: IoGrid },
+  { key: 'participants', label: 'Participants', icon: IoPeople },
+  { key: 'create', label: 'Create Event', icon: IoCreate },
+  { key: 'history', label: 'History', icon: IoTime }
+];
 
-const SwipeableParticipantRow = ({ participant, onCall, onDelete, isSelected, onSelect, showCheckbox }) => {
+// ✅ OPTIMIZED: Memoized SwipeableParticipantRow to prevent unnecessary re-renders
+const SwipeableParticipantRow = React.memo(({ 
+  participant, 
+  onCall, 
+  onDelete, 
+  isSelected, 
+  onSelect, 
+  showCheckbox,
+  isDeleting = false 
+}) => {
   const [isSwipeOpen, setIsSwipeOpen] = useState(false);
   const [swipeDirection, setSwipeDirection] = useState(null);
   const [isMobile, setIsMobile] = useState(false);
-  const [isActing, setIsActing] = useState(false); // ✅ FIXED: Added missing state
+  const [isActing, setIsActing] = useState(false);
 
-  // ✅ IMPROVED: More reliable mobile detection
+  // ✅ OPTIMIZED: Memoized mobile detection
+  const checkMobile = useCallback(() => {
+    const isMobileDevice = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    const isSmallScreen = window.innerWidth <= 768;
+    const hasTouchScreen = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    setIsMobile(isMobileDevice || (isSmallScreen && hasTouchScreen));
+  }, []);
+
   useEffect(() => {
-    const checkMobile = () => {
-      const isMobileDevice = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-      const isSmallScreen = window.innerWidth <= 768;
-      const hasTouchScreen = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-      setIsMobile(isMobileDevice || (isSmallScreen && hasTouchScreen));
-    };
-    
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+  }, [checkMobile]);
 
-  // ✅ FIXED: Added missing checkbox handler
-  const handleCheckboxChange = (e) => {
-    e.stopPropagation(); // Prevent triggering parent events
+  // ✅ OPTIMIZED: Memoized handlers to prevent re-creation
+  const handleCheckboxChange = useCallback((e) => {
+    e.stopPropagation();
     if (onSelect) {
       onSelect(participant.id, e.target.checked);
     }
-  };
+  }, [onSelect, participant.id]);
 
-  // ✅ IMPROVED: Enhanced swipe handlers with better error handling
-  const handlers = useSwipeable({
-    onSwipedLeft: (eventData) => {
-      console.log('Swiped left detected', { isMobile, participant: participant.name });
-      if (!isMobile) {
-        console.log('Swipe ignored - not mobile');
-        return;
-      }
-      
-      setSwipeDirection('delete');
-      setIsSwipeOpen(true);
-      
-      // Add haptic feedback
-      if ('vibrate' in navigator) {
-        navigator.vibrate(50);
-      }
-    },
-    onSwipedRight: (eventData) => {
-      console.log('Swiped right detected', { isMobile, participant: participant.name });
-      if (!isMobile) {
-        console.log('Swipe ignored - not mobile');
-        return;
-      }
-      
-      setSwipeDirection('call');
-      setIsSwipeOpen(true);
-      
-      // Add haptic feedback
-      if ('vibrate' in navigator) {
-        navigator.vibrate(50);
-      }
-    },
-    // onTap: () => {
-    //   if (isSwipeOpen) {
-    //     console.log('Tap to close swipe');
-    //     setIsSwipeOpen(false);
-    //     setSwipeDirection(null);
-    //   }
-    // },
-    preventScrollOnSwipe: true,
-    trackMouse: false, // Disable mouse tracking for desktop
-    delta: 50,           // Reduced minimum swipe distance for easier triggering
-    velocityThreshold: 0.2, // Reduced minimum swipe speed
-    touchEventOptions: { passive: false }
-  });
-
-  // ✅ IMPROVED: Enhanced action handler with better feedback
-  const handleAction = async () => {
-    if (isActing) {
-      console.log('Action already in progress');
-      return;
-    }
+  const handleAction = useCallback(async () => {
+    if (isActing || isDeleting) return;
     
-    console.log('Executing action:', swipeDirection, 'for participant:', participant.name);
-    
-    // Add stronger haptic feedback for action
     if ('vibrate' in navigator && isMobile) {
-      navigator.vibrate([50, 50, 50]); // Triple vibration for action confirmation
+      navigator.vibrate([50, 50, 50]);
     }
     
     setIsActing(true);
     
     try {
       if (swipeDirection === 'call') {
-        console.log('Calling participant:', participant.phone);
         await onCall(participant);
       } else if (swipeDirection === 'delete') {
-        console.log('Deleting participant:', participant.id);
         await onDelete(participant.id);
       }
     } catch (error) {
@@ -182,31 +134,72 @@ const SwipeableParticipantRow = ({ participant, onCall, onDelete, isSelected, on
       setIsSwipeOpen(false);
       setSwipeDirection(null);
     }
-  };
+  }, [isActing, isDeleting, isMobile, swipeDirection, onCall, onDelete, participant]);
 
-  // ✅ IMPROVED: Only close swipe when clicking on main content, not action buttons
-  const handleMainContentClick = (e) => {
-    // Don't close if clicking on action buttons
-    if (e.target.closest('.swipe-action-button')) {
-      console.log('Clicked on action button - not closing swipe');
-      return;
-    }
+  const handleMainContentClick = useCallback((e) => {
+    if (e.target.closest('.swipe-action-button')) return;
     
-    // Only close if swipe is open and clicking on main content
     if (isSwipeOpen) {
-      console.log('Closing swipe - clicked on main content');
       setIsSwipeOpen(false);
       setSwipeDirection(null);
     }
-  };
+  }, [isSwipeOpen]);
 
+  // ✅ OPTIMIZED: Memoized swipe handlers
+// 1️⃣ memoise the options object – it’s just data, no Hooks inside
+const swipeOptions = useMemo(() => ({
+  onSwipedLeft() {
+    if (!isMobile) return;
+    setSwipeDirection('delete');
+    setIsSwipeOpen(true);
+    if ('vibrate' in navigator) navigator.vibrate(50);
+  },
+  onSwipedRight() {
+    if (!isMobile) return;
+    setSwipeDirection('call');
+    setIsSwipeOpen(true);
+    if ('vibrate' in navigator) navigator.vibrate(50);
+  },
+  preventScrollOnSwipe: true,
+  trackMouse: false,
+  delta: 50,
+  velocityThreshold: 0.2,
+  touchEventOptions: { passive: false },
+}), [isMobile]);
+
+// 2️⃣ now call the hook at top level
+const handlers = useSwipeable(swipeOptions);
+
+
+  // ✅ OPTIMIZED: Memoized computed values
+  const lastUpdatedTime = useMemo(() => {
+    if (!participant.lastUpdated) return null;
+    return new Date(participant.lastUpdated.toDate()).toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }, [participant.lastUpdated]);
+
+  const totalNames = useMemo(() => {
+    return (participant.chantCount * 1728).toLocaleString();
+  }, [participant.chantCount]);
+
+  if (isDeleting) {
+    return (
+      <div className="relative overflow-hidden bg-gray-800/30 rounded-lg shadow-sm border border-gray-600/30 mb-2 opacity-50">
+        <div className="flex items-center p-4">
+          <div className="spinner mr-3"></div>
+          <div className="text-gray-400">Deleting {participant.fullName || participant.name}...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div 
       {...handlers}
       className="relative overflow-hidden bg-gray-800/50 rounded-lg shadow-sm border border-gray-600/50 mb-2"
     >
-      {/* Main Content */}
       <div 
         className={`flex items-center p-4 transition-transform duration-200 ${
           isSwipeOpen 
@@ -217,7 +210,6 @@ const SwipeableParticipantRow = ({ participant, onCall, onDelete, isSelected, on
         }`}
         onClick={handleMainContentClick}
       >
-        {/* Desktop Multi-Select Checkbox */}
         {showCheckbox && (
           <input
             type="checkbox"
@@ -232,7 +224,6 @@ const SwipeableParticipantRow = ({ participant, onCall, onDelete, isSelected, on
             <h4 className="font-medium text-white truncate">
               {participant.fullName || participant.name}
             </h4>
-            {/* Role Badge */}
             {participant.role === 'DEVOTEE' && (
               <span className="ml-2 px-2 py-1 bg-orange-500/20 text-orange-300 text-xs rounded">
                 Devotee
@@ -242,19 +233,13 @@ const SwipeableParticipantRow = ({ participant, onCall, onDelete, isSelected, on
           <p className="text-sm text-gray-400">{participant.phone}</p>
           <div className="flex items-center space-x-4 text-xs text-gray-500">
             <span>{participant.chantCount} rounds</span>
-            <span>{(participant.chantCount * 1728).toLocaleString()} names</span>
-            {participant.lastUpdated && (
-              <span>
-                Active: {new Date(participant.lastUpdated.toDate()).toLocaleTimeString([], {
-                  hour: '2-digit',
-                  minute: '2-digit'
-                })}
-              </span>
+            <span>{totalNames} names</span>
+            {lastUpdatedTime && (
+              <span>Active: {lastUpdatedTime}</span>
             )}
           </div>
         </div>
         
-        {/* Desktop Action Buttons */}
         <div className="hidden md:flex space-x-2 flex-shrink-0">
           <button
             onClick={() => onCall(participant)}
@@ -273,12 +258,11 @@ const SwipeableParticipantRow = ({ participant, onCall, onDelete, isSelected, on
         </div>
       </div>
 
-      {/* Mobile Swipe Action Indicators */}
       {isSwipeOpen && (
         <>
           {swipeDirection === 'call' && (
             <div 
-              className="absolute left-0 top-0 h-full w-16 bg-green-600 flex items-center justify-center cursor-pointer md:hidden z-10"
+              className="absolute left-0 top-0 h-full w-16 bg-green-600 flex items-center justify-center cursor-pointer md:hidden z-10 swipe-action-button"
               onClick={handleAction}
             >
               <IoCallOutline className="text-white text-2xl" />
@@ -287,7 +271,7 @@ const SwipeableParticipantRow = ({ participant, onCall, onDelete, isSelected, on
           
           {swipeDirection === 'delete' && (
             <div 
-              className="absolute right-0 top-0 h-full w-16 bg-red-600 flex items-center justify-center cursor-pointer md:hidden z-10"
+              className="absolute right-0 top-0 h-full w-16 bg-red-600 flex items-center justify-center cursor-pointer md:hidden z-10 swipe-action-button"
               onClick={handleAction}
             >
               <IoTrashOutline className="text-white text-2xl" />
@@ -297,77 +281,118 @@ const SwipeableParticipantRow = ({ participant, onCall, onDelete, isSelected, on
       )}
     </div>
   );
-};
+});
 
+SwipeableParticipantRow.displayName = 'SwipeableParticipantRow';
 
+// ✅ OPTIMIZED: Memoized Navigation Component
+const NavigationTabs = React.memo(({ currentView, onViewChange }) => (
+  <div className="grid grid-cols-2 sm:flex sm:flex-wrap justify-center sm:justify-start gap-2 sm:gap-2 mb-6">
+    {NAVIGATION_ITEMS.map((item) => {
+      const IconComponent = item.icon;
+      const isActive = currentView === item.key;
+      
+      return (
+        <button
+          key={item.key}
+          onClick={() => onViewChange(item.key)}
+          className={`flex items-center justify-center sm:justify-start space-x-2 p-3 sm:px-4 sm:py-2 rounded-lg text-sm font-medium transition-all duration-200 min-h-[80px] sm:min-h-0 flex-col sm:flex-row space-y-1 sm:space-y-0 ${
+            isActive 
+              ? 'bg-saffron-500 text-white shadow-lg sm:transform sm:scale-105' 
+              : 'bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 hover:text-white'
+          }`}
+        >
+          <IconComponent className="text-xl sm:text-lg" />
+          <span className="text-xs sm:text-sm text-center sm:text-left leading-tight">{item.label}</span>
+        </button>
+      );
+    })}
+  </div>
+));
+
+NavigationTabs.displayName = 'NavigationTabs';
+
+// ✅ OPTIMIZED: Main Component with performance improvements
 const EnhancedAdminPanel = ({ eventSettings }) => {
   const { user } = useAuth();
   const [globalCount, setGlobalCount] = useState(0);
   const [participants, setParticipants] = useState([]);
   const [eventsHistory, setEventsHistory] = useState([]);
-  const [currentView, setCurrentView] = useState('dashboard'); // dashboard, create, history, participants
+  const [currentView, setCurrentView] = useState('dashboard');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
 
-  // ✅ NEW: Participant management state
+  // Participant management state
   const [selectedParticipants, setSelectedParticipants] = useState(new Set());
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
-  const [participantFilter, setParticipantFilter] = useState('all'); // all, active, inactive
+  const [participantFilter, setParticipantFilter] = useState('all');
+  const [deletingIds, setDeletingIds] = useState(new Set());
 
-  // New event form state
-  // ✅ FIXED: Proper time format in initial state
+  // ✅ OPTIMIZED: Proper initial state with default date
   const [newEventForm, setNewEventForm] = useState({
     eventName: '',
-    eventDate: new Date(), // ✅ Default to today
+    eventDate: new Date(),
     globalGoal: 666,
-    startTime: '06:00', // ✅ String format, not number
-    endTime: '23:59',   // ✅ String format, not number  
+    startTime: '06:00',
+    endTime: '23:59',
     description: ''
   });
 
+  // ✅ OPTIMIZED: Memoized computed values
+  const activeParticipants = useMemo(() => 
+    participants.filter(p => p.chantCount > 0), 
+    [participants]
+  );
 
-  useEffect(() => {
-    const unsubscribeCount = subscribeToGlobalCount(setGlobalCount);
-    const unsubscribeLeaderboard = subscribeToLeaderboard(setParticipants);
+  const progressPercentage = useMemo(() => 
+    eventSettings?.globalGoal ? 
+      ((globalCount / eventSettings.globalGoal) * 100).toFixed(1) : 0,
+    [globalCount, eventSettings?.globalGoal]
+  );
 
-    loadEventsHistory();
+  const eventStatus = useMemo(() => 
+    eventSettings?.eventActive ? 'Active' :
+    eventSettings?.status === 'completed' ? 'Completed' : 'Stopped',
+    [eventSettings?.eventActive, eventSettings?.status]
+  );
 
-    return () => {
-      unsubscribeCount();
-      unsubscribeLeaderboard();
-    };
+  const filteredParticipants = useMemo(() => 
+    participants.filter(participant => {
+      switch (participantFilter) {
+        case 'active': return participant.chantCount > 0;
+        case 'inactive': return participant.chantCount === 0;
+        default: return true;
+      }
+    }),
+    [participants, participantFilter]
+  );
+
+  // ✅ OPTIMIZED: Debounced message clearing
+  const messageTimeoutRef = useRef();
+  const showMessage = useCallback((type, text) => {
+    setMessage({ type, text });
+    
+    if (messageTimeoutRef.current) {
+      clearTimeout(messageTimeoutRef.current);
+    }
+    
+    messageTimeoutRef.current = setTimeout(() => {
+      setMessage({ type: '', text: '' });
+    }, 5000);
   }, []);
 
-  const loadEventsHistory = async () => {
-    const result = await getEventsHistory(5);
-    if (result.success) {
-      setEventsHistory(result.events);
-    }
-  };
-
-  const showMessage = (type, text) => {
-    setMessage({ type, text });
-    setTimeout(() => setMessage({ type: '', text: '' }), 5000);
-  };
-
-  // ✅ NEW: Call participant function
-  // 🔧 IMPROVED: Enhanced phone number handling
-  const handleCallParticipant = (participant) => {
+  // ✅ OPTIMIZED: Memoized event handlers
+  const handleCallParticipant = useCallback((participant) => {
     try {
       let cleanNumber = participant.phone.replace(/[^\d+]/g, '');
       
-      // Handle different number formats
       if (cleanNumber.startsWith('+91')) {
-        // Already formatted
         window.open(`tel:${cleanNumber}`);
       } else if (cleanNumber.startsWith('91') && cleanNumber.length === 12) {
-        // Add + prefix
         window.open(`tel:+${cleanNumber}`);
       } else if (cleanNumber.length === 10) {
-        // Standard 10-digit Indian number
         window.open(`tel:+91${cleanNumber}`);
       } else {
-        // Fallback - use as-is but show warning
         console.warn('Unusual phone number format:', participant.phone);
         window.open(`tel:${cleanNumber}`);
       }
@@ -377,38 +402,30 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
       console.error('Call error:', error);
       showMessage('error', 'Failed to initiate call');
     }
-  };
+  }, [showMessage]);
 
-
-  // ✅ NEW: Delete participant function
-  // 🔧 IMPROVED: Add individual loading states
-  const [deletingIds, setDeletingIds] = useState(new Set());
-
-  const handleDeleteParticipant = async (participantId) => {
+  const handleDeleteParticipant = useCallback(async (participantId) => {
     const participant = participants.find(p => p.id === participantId);
     if (!participant) return;
 
     if (window.confirm(`Delete "${participant.fullName || participant.name}"?\n\nThis cannot be undone.`)) {
       try {
-        // Add to loading set
         setDeletingIds(prev => new Set([...prev, participantId]));
         
         await deleteDoc(doc(db, USERS_COLLECTION, participantId));
         
         showMessage('success', `🗑️ Deleted ${participant.fullName || participant.name}`);
         
-        // Clean up selections
-        if (selectedParticipants.has(participantId)) {
-          const newSelected = new Set(selectedParticipants);
+        setSelectedParticipants(prev => {
+          const newSelected = new Set(prev);
           newSelected.delete(participantId);
-          setSelectedParticipants(newSelected);
-        }
+          return newSelected;
+        });
         
       } catch (error) {
         console.error('Delete error:', error);
         showMessage('error', `Failed to delete ${participant.fullName || participant.name}`);
       } finally {
-        // Remove from loading set
         setDeletingIds(prev => {
           const newSet = new Set(prev);
           newSet.delete(participantId);
@@ -416,20 +433,21 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
         });
       }
     }
-  };
+  }, [participants, showMessage]);
 
-  // ✅ NEW: Multi-select functions
-  const handleSelectParticipant = (participantId, isSelected) => {
-    const newSelected = new Set(selectedParticipants);
-    if (isSelected) {
-      newSelected.add(participantId);
-    } else {
-      newSelected.delete(participantId);
-    }
-    setSelectedParticipants(newSelected);
-  };
+  const handleSelectParticipant = useCallback((participantId, isSelected) => {
+    setSelectedParticipants(prev => {
+      const newSelected = new Set(prev);
+      if (isSelected) {
+        newSelected.add(participantId);
+      } else {
+        newSelected.delete(participantId);
+      }
+      return newSelected;
+    });
+  }, []);
 
-  const handleMultiDelete = async () => {
+  const handleMultiDelete = useCallback(async () => {
     if (selectedParticipants.size === 0) return;
 
     const selectedNames = Array.from(selectedParticipants)
@@ -462,7 +480,6 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
           showMessage('error', `Failed to delete ${failed} participants`);
         }
 
-        // Clear selection
         setSelectedParticipants(new Set());
         setIsMultiSelectMode(false);
 
@@ -473,22 +490,10 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
         setLoading(false);
       }
     }
-  };
+  }, [selectedParticipants, participants, showMessage]);
 
-  // ✅ NEW: Filter participants
-  const filteredParticipants = participants.filter(participant => {
-    switch (participantFilter) {
-      case 'active':
-        return participant.chantCount > 0;
-      case 'inactive':
-        return participant.chantCount === 0;
-      default:
-        return true;
-    }
-  });
-
-  // Existing event handler functions...
-  const handleStartEvent = async () => {
+  // ✅ OPTIMIZED: Memoized form handlers
+  const handleStartEvent = useCallback(async () => {
     if (window.confirm('Start the event now? All users will be able to submit chanted rounds.')) {
       setLoading(true);
       const result = await startEvent();
@@ -499,9 +504,9 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
       }
       setLoading(false);
     }
-  };
+  }, [showMessage]);
 
-  const handleStopEvent = async () => {
+  const handleStopEvent = useCallback(async () => {
     if (window.confirm('Stop the event? Users will not be able to submit new chanted rounds.')) {
       setLoading(true);
       const result = await stopEvent();
@@ -512,63 +517,23 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
       }
       setLoading(false);
     }
-  };
+  }, [showMessage]);
 
-  const handleCompleteEvent = async () => {
-  if (window.confirm('Complete this event? This will finalize all stats and save to history.')) {
-    setLoading(true);
-    const result = await completeEvent();
-    if (result.success) {
-      // ✅ NEW: Automatically save to history when completed
-      await loadEventsHistory(); // Refresh history to show the completed event
-      showMessage('success', '✅ Event completed and saved to history!');
-    } else {
-      showMessage('error', `Failed to complete event: ${result.error}`);
+  const handleCompleteEvent = useCallback(async () => {
+    if (window.confirm('Complete this event? This will finalize all stats and save to history.')) {
+      setLoading(true);
+      const result = await completeEvent();
+      if (result.success) {
+        await loadEventsHistory();
+        showMessage('success', '✅ Event completed and saved to history!');
+      } else {
+        showMessage('error', `Failed to complete event: ${result.error}`);
+      }
+      setLoading(false);
     }
-    setLoading(false);
-  }
-};
+  }, [showMessage]);
 
-
-  const handleCreateNewEvent = async (e) => {
-  e.preventDefault();
-  
-  if (window.confirm('Create new event? This will archive the current event and clear all participant data.')) {
-    setLoading(true);
-    
-    // ✅ FIXED: Convert time strings to hours for backend
-    const startHour = newEventForm.startTime ? parseInt(newEventForm.startTime.split(':')[0]) : 6;
-    const endHour = newEventForm.endTime ? parseInt(newEventForm.endTime.split(':')) : 24;
-    
-    const eventData = {
-      ...newEventForm,
-      startTime: startHour, // Backend expects number
-      endTime: endHour      // Backend expects number
-    };
-    
-    const result = await createNewEvent(eventData);
-    if (result.success) {
-      showMessage('success', '🎊 New event created successfully!');
-      setCurrentView('dashboard');
-      // ✅ FIXED: Reset with proper format
-      setNewEventForm({
-        eventName: '',
-        eventDate: new Date(),
-        globalGoal: 666,
-        startTime: '06:00',
-        endTime: '23:59',
-        description: ''
-      });
-      loadEventsHistory();
-    } else {
-      showMessage('error', `Failed to create event: ${result.error}`);
-    }
-    setLoading(false);
-  }
-};
-
-
-  const handleArchiveCurrentEvent = async () => {
+  const handleArchiveCurrentEvent = useCallback(async () => {
     if (window.confirm(
       'Archive current event?\n\n' +
       '• Event history will be saved\n' +
@@ -587,20 +552,71 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
       }
       setLoading(false);
     }
-  };
+  }, [showMessage]);
 
-  const activeParticipants = participants.filter(p => p.chantCount > 0);
-  const progressPercentage = eventSettings?.globalGoal ? 
-    ((globalCount / eventSettings.globalGoal) * 100).toFixed(1) : 0;
+  const handleCreateNewEvent = useCallback(async (e) => {
+    e.preventDefault();
+    
+    if (window.confirm('Create new event? This will archive the current event and clear all participant data.')) {
+      setLoading(true);
+      
+      const startHour = newEventForm.startTime ? parseInt(newEventForm.startTime.split(':')[0]) : 6;
+      const endHour = newEventForm.endTime ? parseInt(newEventForm.endTime.split(':')) : 24;
+      
+      const eventData = {
+        ...newEventForm,
+        startTime: startHour,
+        endTime: endHour
+      };
+      
+      const result = await createNewEvent(eventData);
+      if (result.success) {
+        showMessage('success', '🎊 New event created successfully!');
+        setCurrentView('dashboard');
+        setNewEventForm({
+          eventName: '',
+          eventDate: new Date(),
+          globalGoal: 666,
+          startTime: '06:00',
+          endTime: '23:59',
+          description: ''
+        });
+        loadEventsHistory();
+      } else {
+        showMessage('error', `Failed to create event: ${result.error}`);
+      }
+      setLoading(false);
+    }
+  }, [newEventForm, showMessage]);
 
-  const eventStatus = eventSettings?.eventActive ? 'Active' :
-                     eventSettings?.status === 'completed' ? 'Completed' : 'Stopped';
+  // ✅ OPTIMIZED: Memoized load function
+  const loadEventsHistory = useCallback(async () => {
+    const result = await getEventsHistory(5);
+    if (result.success) {
+      setEventsHistory(result.events);
+    }
+  }, []);
+
+  // ✅ OPTIMIZED: Effect cleanup
+  useEffect(() => {
+    const unsubscribeCount = subscribeToGlobalCount(setGlobalCount);
+    const unsubscribeLeaderboard = subscribeToLeaderboard(setParticipants);
+
+    loadEventsHistory();
+
+    return () => {
+      unsubscribeCount();
+      unsubscribeLeaderboard();
+      if (messageTimeoutRef.current) {
+        clearTimeout(messageTimeoutRef.current);
+      }
+    };
+  }, [loadEventsHistory]);
 
   return (
     <div className="space-y-6">
-      {/* // ✅ IMPROVED: Premium Admin Header */}
+      {/* Premium Admin Header */}
       <div className="card-devotional bg-gradient-to-r from-red-900/20 to-orange-900/20 border-red-500/30">
-        {/* Header Title Section */}
         <div className="flex flex-col sm:flex-row items-center justify-between mb-6">
           <div className="flex items-center space-x-3 mb-4 sm:mb-0">
             <div className="p-2 bg-red-500/20 rounded-lg">
@@ -614,7 +630,6 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
             </div>
           </div>
           
-          {/* Admin Badge */}
           <div className="flex items-center space-x-2 bg-red-500/10 px-3 py-2 rounded-lg border border-red-500/20">
             <IoShieldCheckmark className="text-lg text-red-400" />
             <span className="text-sm font-medium text-red-300">Admin Access</span>
@@ -626,36 +641,8 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
           </div>
         </div>
         
-        {/* Navigation Tabs */}
-        <div className="grid grid-cols-2 sm:flex sm:flex-wrap justify-center sm:justify-start gap-2 sm:gap-2 mb-6">
-          {[
-            { key: 'dashboard', label: 'Dashboard', icon: IoGrid },
-            { key: 'participants', label: 'Participants', icon: IoPeople },
-            { key: 'create', label: 'Create Event', icon: IoCreate },
-            { key: 'history', label: 'History', icon: IoTime }
-          ].map((item) => {
-            const IconComponent = item.icon;
-            const isActive = currentView === item.key;
-            
-            return (
-              <button
-                key={item.key}
-                onClick={() => setCurrentView(item.key)}
-                className={`flex items-center justify-center sm:justify-start space-x-2 p-3 sm:px-4 sm:py-2 rounded-lg text-sm font-medium transition-all duration-200 min-h-[80px] sm:min-h-0 flex-col sm:flex-row space-y-1 sm:space-y-0 ${
-                  isActive 
-                    ? 'bg-saffron-500 text-white shadow-lg sm:transform sm:scale-105' 
-                    : 'bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 hover:text-white'
-                }`}
-              >
-                <IconComponent className="text-xl sm:text-lg" />
-                <span className="text-xs sm:text-sm text-center sm:text-left leading-tight">{item.label}</span>
-              </button>
-            );
-          })}
-        </div>
-
+        <NavigationTabs currentView={currentView} onViewChange={setCurrentView} />
         
-        {/* Status Information */}
         <div className="bg-gray-800/30 rounded-lg p-4">
           <div className="flex flex-col sm:flex-row items-center justify-between space-y-2 sm:space-y-0">
             <div className="flex items-center space-x-3">
@@ -683,7 +670,6 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
                 </div>
               </div>
               
-              {/* Quick Stats */}
               <div className="hidden md:flex items-center space-x-4 text-xs text-gray-400">
                 <div className="flex items-center space-x-1">
                   <IoPeople className="text-blue-400" />
@@ -699,10 +685,9 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
         </div>
       </div>
 
-      {/* ✅ NEW: Participants Management View */}
+      {/* Participants Management View */}
       {currentView === 'participants' && (
         <div className="space-y-6">
-          {/* Participant Controls */}
           <div className="card-devotional">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
               <h3 className="text-xl font-semibold text-gray-300 flex items-center gap-2">
@@ -710,11 +695,9 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
                 Participant Management ({filteredParticipants.length})
               </h3>
               
-              {/* Desktop Controls */}
               <div className="flex flex-wrap gap-2">
-                {/* Filter Buttons */}
                 <div className="flex bg-gray-800 rounded-lg overflow-hidden">
-                  {['all', 'active', 'inactive'].map((filter) => (
+                  {PARTICIPANT_FILTERS.map((filter) => (
                     <button
                       key={filter}
                       onClick={() => setParticipantFilter(filter)}
@@ -730,7 +713,6 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
                   ))}
                 </div>
 
-                {/* Multi-Select Toggle */}
                 <button
                   onClick={() => {
                     setIsMultiSelectMode(!isMultiSelectMode);
@@ -746,7 +728,6 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
                   {isMultiSelectMode ? 'Cancel Selection' : 'Multi Select'}
                 </button>
                 
-                {/* Multi Delete Button */}
                 {isMultiSelectMode && selectedParticipants.size > 0 && (
                   <button
                     onClick={handleMultiDelete}
@@ -757,17 +738,14 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
                     Delete Selected ({selectedParticipants.size})
                   </button>
                 )}
-
               </div>
             </div>
 
-            {/* Mobile Instructions */}
             <div className="md:hidden mb-4 p-3 bg-gray-800/50 rounded-lg text-sm text-gray-400 flex items-center gap-2">
               <IoPhonePortraitOutline />
               <strong>Mobile:</strong> Swipe right to call, swipe left to delete
             </div>
 
-            {/* Participants List */}
             <div className="space-y-2 max-h-96 overflow-y-auto">
               {filteredParticipants.length === 0 ? (
                 <div className="text-center py-8 text-gray-400">
@@ -783,6 +761,7 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
                     isSelected={selectedParticipants.has(participant.id)}
                     onSelect={handleSelectParticipant}
                     showCheckbox={isMultiSelectMode}
+                    isDeleting={deletingIds.has(participant.id)}
                   />
                 ))
               )}
@@ -791,13 +770,10 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
         </div>
       )}
 
-      
-     {/* // ✅ UPDATED: Enhanced Event Controls section in your dashboard view */}
+      {/* Dashboard View */}
       {currentView === 'dashboard' && (
         <>
-          {/* ✅ IMPROVED: Event Controls with Individual Group Backgrounds */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Primary Event Control Group */}
             <div className="card-devotional bg-gradient-to-r from-green-900/10 to-blue-900/10 border-green-500/20">
               <div className="mb-4">
                 <h4 className="text-lg font-semibold text-gray-300 mb-1">Event Control</h4>
@@ -825,7 +801,6 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
               </div>
             </div>
 
-            {/* Event Lifecycle Group */}
             <div className="card-devotional bg-gradient-to-r from-purple-900/10 to-indigo-900/10 border-purple-500/20">
               <div className="mb-4">
                 <h4 className="text-lg font-semibold text-gray-300 mb-1">Event Lifecycle</h4>
@@ -854,7 +829,6 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
             </div>
           </div>
 
-          {/* ✅ IMPROVED: Real-time Stats with React Icons */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="card-devotional text-center">
               <div className="flex items-center justify-center space-x-2 mb-2">
@@ -890,7 +864,6 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
             </div>
           </div>
 
-          {/* Top Performers section remains the same... */}
           <div className="card-devotional">
             <h3 className="text-xl font-semibold text-gray-300 mb-4">Top Performers</h3>
             <div className="space-y-2 max-h-60 overflow-y-auto">
@@ -913,10 +886,9 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
         </>
       )}
 
-      {/* // ✅ ENHANCED: Create New Event Form */}
+      {/* Create New Event Form */}
       {currentView === 'create' && (
         <div className="space-y-6">
-          {/* Form Header */}
           <div className="card-devotional bg-gradient-to-r from-blue-900/10 to-indigo-900/10 border-blue-500/20">
             <div className="flex items-center space-x-3 mb-4">
               <div className="p-2 bg-blue-500/20 rounded-lg">
@@ -928,7 +900,6 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
               </div>
             </div>
 
-            {/* Quick Ekadashi Reference */}
             <div className="bg-gray-800/30 rounded-lg p-4">
               <div className="flex items-center space-x-2 mb-3">
                 <IoCalendar className="text-lg text-saffron-400" />
@@ -964,10 +935,8 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
             </div>
           </div>
 
-          {/* Enhanced Form */}
           <div className="card-devotional">
             <form onSubmit={handleCreateNewEvent} className="space-y-6">
-              {/* Event Details Section */}
               <div>
                 <div className="flex items-center space-x-2 mb-4">
                   <IoText className="text-lg text-gray-400" />
@@ -1008,67 +977,60 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
                 </div>
               </div>
 
-              {/* Date & Time Section */}
-              {/* // ✅ REPLACE the entire Date & Time section with this: */}
-                <div>
-                  <div className="flex items-center space-x-2 mb-4">
-                    <IoCalendar className="text-lg text-gray-400" />
-                    <h4 className="text-lg font-semibold text-gray-300">Date & Time</h4>
+              <div>
+                <div className="flex items-center space-x-2 mb-4">
+                  <IoCalendar className="text-lg text-gray-400" />
+                  <h4 className="text-lg font-semibold text-gray-300">Date & Time</h4>
+                </div>
+                
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                  <div>
+                    <label className="flex items-center space-x-2 text-sm font-medium text-gray-300 mb-2">
+                      <IoCalendar className="text-sm" />
+                      <span>Event Date</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={newEventForm.eventDate ? newEventForm.eventDate.toISOString().split('T')[0] : ''}
+                      onChange={(e) => setNewEventForm(prev => ({
+                        ...prev, 
+                        eventDate: e.target.value ? new Date(e.target.value) : null
+                      }))}
+                      className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-saffron-500 focus:ring-2 focus:ring-saffron-500/20 transition-colors"
+                      required
+                    />
                   </div>
-                  
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                    {/* Event Date */}
-                    <div>
-                      <label className="flex items-center space-x-2 text-sm font-medium text-gray-300 mb-2">
-                        <IoCalendar className="text-sm" />
-                        <span>Event Date</span>
-                      </label>
-                      <input
-                        type="date"
-                        value={newEventForm.eventDate ? newEventForm.eventDate.toISOString().split('T')[0] : ''}
-                        onChange={(e) => setNewEventForm(prev => ({
-                          ...prev, 
-                          eventDate: e.target.value ? new Date(e.target.value) : null
-                        }))}
-                        className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-saffron-500 focus:ring-2 focus:ring-saffron-500/20 transition-colors"
-                        required
-                      />
-                    </div>
 
-                    {/* Start Time */}
-                    <div>
-                      <label className="flex items-center space-x-2 text-sm font-medium text-gray-300 mb-2">
-                        <IoTime className="text-sm" />
-                        <span>Start Time</span>
-                      </label>
-                      <input
-                        type="time"
-                        value={newEventForm.startTime}
-                        onChange={(e) => setNewEventForm(prev => ({...prev, startTime: e.target.value}))}
-                        className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-saffron-500 focus:ring-2 focus:ring-saffron-500/20 transition-colors"
-                        required
-                      />
-                    </div>
+                  <div>
+                    <label className="flex items-center space-x-2 text-sm font-medium text-gray-300 mb-2">
+                      <IoTime className="text-sm" />
+                      <span>Start Time</span>
+                    </label>
+                    <input
+                      type="time"
+                      value={newEventForm.startTime}
+                      onChange={(e) => setNewEventForm(prev => ({...prev, startTime: e.target.value}))}
+                      className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-saffron-500 focus:ring-2 focus:ring-saffron-500/20 transition-colors"
+                      required
+                    />
+                  </div>
 
-                    {/* End Time */}
-                    <div>
-                      <label className="flex items-center space-x-2 text-sm font-medium text-gray-300 mb-2">
-                        <IoTime className="text-sm" />
-                        <span>End Time</span>
-                      </label>
-                      <input
-                        type="time"
-                        value={newEventForm.endTime}
-                        onChange={(e) => setNewEventForm(prev => ({...prev, endTime: e.target.value}))}
-                        className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-saffron-500 focus:ring-2 focus:ring-saffron-500/20 transition-colors"
-                        required
-                      />
-                    </div>
+                  <div>
+                    <label className="flex items-center space-x-2 text-sm font-medium text-gray-300 mb-2">
+                      <IoTime className="text-sm" />
+                      <span>End Time</span>
+                    </label>
+                    <input
+                      type="time"
+                      value={newEventForm.endTime}
+                      onChange={(e) => setNewEventForm(prev => ({...prev, endTime: e.target.value}))}
+                      className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-saffron-500 focus:ring-2 focus:ring-saffron-500/20 transition-colors"
+                      required
+                    />
                   </div>
                 </div>
+              </div>
 
-
-              {/* Description Section */}
               <div>
                 <div className="flex items-center space-x-2 mb-4">
                   <IoInformationCircle className="text-lg text-gray-400" />
@@ -1084,7 +1046,6 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
                 />
               </div>
 
-              {/* Action Buttons */}
               <div className="border-t border-gray-700/50 pt-6">
                 <div className="flex flex-col sm:flex-row gap-3">
                   <button
@@ -1093,7 +1054,7 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
                       setCurrentView('dashboard');
                       setNewEventForm({
                         eventName: '',
-                        eventDate: null,
+                        eventDate: new Date(),
                         globalGoal: 666,
                         startTime: '06:00',
                         endTime: '23:59',
@@ -1130,7 +1091,7 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
         </div>
       )}
 
-      {/* Events History View - keeping existing code... */}
+      {/* Events History View */}
       {currentView === 'history' && (
         <div className="card-devotional">
           <h3 className="text-xl font-semibold text-gray-300 mb-4">Events History</h3>
