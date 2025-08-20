@@ -113,7 +113,8 @@ const AuthForm = () => {
   };
 
   return (
-    <div className="card-devotional w-full max-w-md animate-fade-in text-white">
+    <div className="card-devotional w-full max-w-md animate-fade-in text-white overflow-hidden
+      overscroll-none">
       <div className="text-center mb-6">
         <h1 className="text-3xl font-bold text-gradient-saffron mb-2">
           🙏 Hare Krishna
