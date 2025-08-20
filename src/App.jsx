@@ -6,6 +6,7 @@ import Home from './pages/Home.jsx';
 import CountdownTimer from './components/CountdownTimer.jsx';
 import Navbar from './components/Navbar.jsx';
 import { getEventStatus, isAdmin } from './services/firebase.js';
+import ReactLenis from 'lenis/react';
 
 // Main App Content (inside AuthProvider)
 const AppContent = () => {
@@ -228,9 +229,22 @@ const AppContent = () => {
 // Root App Component
 const App = () => {
   return (
+    <ReactLenis
+    root
+    options={{
+      lerp: 0.1,
+      duration: 1.2,
+      orientation: 'vertical',
+      gestureOrientation: 'vertical',
+      smoothWheel: true,
+      wheelMultiplier: 1,
+      touchMultiplier: 2
+    }}
+    >
     <AuthProvider>
       <AppContent />
     </AuthProvider>
+    </ReactLenis>
   );
 };
 
