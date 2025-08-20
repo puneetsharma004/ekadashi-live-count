@@ -1,7 +1,7 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import { formatPhoneDisplay } from '../utils/validation';
-
+import { FiUser } from "react-icons/fi";
 const Navbar = () => {
   const { user, logout } = useAuth();
 
@@ -24,8 +24,8 @@ const Navbar = () => {
           <div className="flex items-center space-x-4">
             {user && (
               <div className="hidden sm:flex items-center space-x-3 text-sm text-gray-300">
-                <span>
-                  <span className="text-saffron-400">🧡</span>
+                <span className='flex items-center justify-between'>
+                  <span className="text-saffron-400"><FiUser /></span>
                   <span className="ml-1">{user.fullName}</span>
                 </span>
                 <span className="text-gray-500">|</span>
@@ -48,8 +48,8 @@ const Navbar = () => {
         {user && (
           <div className="sm:hidden mt-2 pt-2 border-t border-gray-700/50">
             <div className="flex items-center justify-between text-sm text-gray-300">
-              <span>
-                <span className="text-saffron-400">🧡</span>
+              <span className='flex items-center justify-between'>
+                <span className="text-saffron-400"><FiUser /></span>
                 <span className="ml-1">{user.fullName}</span>
               </span>
               <span className="text-gray-400">
