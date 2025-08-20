@@ -113,9 +113,7 @@ const AuthForm = () => {
   };
 
   return (
-    <div>
-    <div className="card-devotional w-full max-w-md animate-fade-in text-white 
-      overscroll-none">
+    <div className="card-devotional w-full max-w-md animate-fade-in text-white">
       <div className="text-center mb-6">
         <h1 className="text-3xl font-bold text-gradient-saffron mb-2">
           🙏 Hare Krishna
@@ -280,7 +278,6 @@ const AuthForm = () => {
           }
         </button>
       </div>
-    </div>
     </div>
   );
 };
