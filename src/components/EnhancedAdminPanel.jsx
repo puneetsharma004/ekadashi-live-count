@@ -81,14 +81,15 @@ const SwipeableParticipantRow = ({ participant, onCall, onDelete, isSelected, on
   const [isSwipeOpen, setIsSwipeOpen] = useState(false);
   const [swipeDirection, setSwipeDirection] = useState(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [isActing, setIsActing] = useState(false); // ✅ FIXED: Added missing state
 
-  // Detect mobile device
-  // 🔧 IMPROVED: More reliable mobile detection
+  // ✅ IMPROVED: More reliable mobile detection
   useEffect(() => {
     const checkMobile = () => {
       const isMobileDevice = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
       const isSmallScreen = window.innerWidth <= 768;
-      setIsMobile(isMobileDevice || isSmallScreen);
+      const hasTouchScreen = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+      setIsMobile(isMobileDevice || (isSmallScreen && hasTouchScreen));
     };
     
     checkMobile();
@@ -96,48 +97,96 @@ const SwipeableParticipantRow = ({ participant, onCall, onDelete, isSelected, on
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+  // ✅ FIXED: Added missing checkbox handler
+  const handleCheckboxChange = (e) => {
+    e.stopPropagation(); // Prevent triggering parent events
+    if (onSelect) {
+      onSelect(participant.id, e.target.checked);
+    }
+  };
 
+  // ✅ IMPROVED: Enhanced swipe handlers with better error handling
   const handlers = useSwipeable({
-    onSwipedLeft: () => {
-      if (!isMobile) return; // Only allow swipe on mobile
+    onSwipedLeft: (eventData) => {
+      console.log('Swiped left detected', { isMobile, participant: participant.name });
+      if (!isMobile) {
+        console.log('Swipe ignored - not mobile');
+        return;
+      }
+      
       setSwipeDirection('delete');
       setIsSwipeOpen(true);
+      
+      // Add haptic feedback
+      if ('vibrate' in navigator) {
+        navigator.vibrate(50);
+      }
     },
-    onSwipedRight: () => {
-      if (!isMobile) return; // Only allow swipe on mobile
+    onSwipedRight: (eventData) => {
+      console.log('Swiped right detected', { isMobile, participant: participant.name });
+      if (!isMobile) {
+        console.log('Swipe ignored - not mobile');
+        return;
+      }
+      
       setSwipeDirection('call');
       setIsSwipeOpen(true);
+      
+      // Add haptic feedback
+      if ('vibrate' in navigator) {
+        navigator.vibrate(50);
+      }
     },
     onTap: () => {
-      setIsSwipeOpen(false);
-      setSwipeDirection(null);
+      if (isSwipeOpen) {
+        console.log('Tap to close swipe');
+        setIsSwipeOpen(false);
+        setSwipeDirection(null);
+      }
     },
-    preventDefaultTouchmoveEvent: true,
+    preventScrollOnSwipe: true,
     trackMouse: false, // Disable mouse tracking for desktop
-    delta: 60,           // Minimum swipe distance
-    velocityThreshold: 0.3, // Minimum swipe speed
+    delta: 50,           // Reduced minimum swipe distance for easier triggering
+    velocityThreshold: 0.2, // Reduced minimum swipe speed
     touchEventOptions: { passive: false }
   });
 
-  // 🔧 IMPROVED: Add haptic feedback on swipe actions
+  // ✅ IMPROVED: Enhanced action handler with better feedback
   const handleAction = async () => {
-    if (isActing) return;
+    if (isActing) {
+      console.log('Action already in progress');
+      return;
+    }
     
-    // Add haptic feedback if available
+    console.log('Executing action:', swipeDirection, 'for participant:', participant.name);
+    
+    // Add stronger haptic feedback for action
     if ('vibrate' in navigator && isMobile) {
-      navigator.vibrate(50); // Short vibration
+      navigator.vibrate([50, 50, 50]); // Triple vibration for action confirmation
     }
     
     setIsActing(true);
     
     try {
       if (swipeDirection === 'call') {
+        console.log('Calling participant:', participant.phone);
         await onCall(participant);
       } else if (swipeDirection === 'delete') {
+        console.log('Deleting participant:', participant.id);
         await onDelete(participant.id);
       }
+    } catch (error) {
+      console.error('Action failed:', error);
     } finally {
       setIsActing(false);
+      setIsSwipeOpen(false);
+      setSwipeDirection(null);
+    }
+  };
+
+  // ✅ ADDED: Close swipe on outside tap
+  const handleMainContentClick = (e) => {
+    if (isSwipeOpen && !e.target.closest('.swipe-action')) {
       setIsSwipeOpen(false);
       setSwipeDirection(null);
     }
