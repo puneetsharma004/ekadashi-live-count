@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { 
   updateEventSettings,
@@ -46,12 +46,15 @@ import {
   IoInformationCircle,
   IoAdd,
   IoCheckmark,
-  IoAlert
+  IoAlert,
+  IoCheckboxOutline, 
+  IoTrashOutline, 
+  IoPhonePortraitOutline,
+  IoCallOutline,
+  IoPersonOutline 
 } from 'react-icons/io5';
 
 // ✅ ADD: Import date/time pickers and additional icons
-import DatePicker from 'react-date-picker';
-import TimePicker from 'react-time-picker';
 import 'react-date-picker/dist/DatePicker.css';
 import 'react-time-picker/dist/TimePicker.css';
 import 'react-calendar/dist/Calendar.css';
@@ -73,16 +76,35 @@ const VAISHNAVA_EVENTS = [
 ];
 
 // ✅ NEW: Swipeable Participant Row Component
+
 const SwipeableParticipantRow = ({ participant, onCall, onDelete, isSelected, onSelect, showCheckbox }) => {
   const [isSwipeOpen, setIsSwipeOpen] = useState(false);
   const [swipeDirection, setSwipeDirection] = useState(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Detect mobile device
+  // 🔧 IMPROVED: More reliable mobile detection
+  useEffect(() => {
+    const checkMobile = () => {
+      const isMobileDevice = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      const isSmallScreen = window.innerWidth <= 768;
+      setIsMobile(isMobileDevice || isSmallScreen);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
 
   const handlers = useSwipeable({
     onSwipedLeft: () => {
+      if (!isMobile) return; // Only allow swipe on mobile
       setSwipeDirection('delete');
       setIsSwipeOpen(true);
     },
     onSwipedRight: () => {
+      if (!isMobile) return; // Only allow swipe on mobile
       setSwipeDirection('call');
       setIsSwipeOpen(true);
     },
@@ -91,18 +113,36 @@ const SwipeableParticipantRow = ({ participant, onCall, onDelete, isSelected, on
       setSwipeDirection(null);
     },
     preventDefaultTouchmoveEvent: true,
-    trackMouse: true
+    trackMouse: false, // Disable mouse tracking for desktop
+    delta: 60,           // Minimum swipe distance
+    velocityThreshold: 0.3, // Minimum swipe speed
+    touchEventOptions: { passive: false }
   });
 
-  const handleAction = () => {
-    if (swipeDirection === 'call') {
-      onCall(participant);
-    } else if (swipeDirection === 'delete') {
-      onDelete(participant.id);
+  // 🔧 IMPROVED: Add haptic feedback on swipe actions
+  const handleAction = async () => {
+    if (isActing) return;
+    
+    // Add haptic feedback if available
+    if ('vibrate' in navigator && isMobile) {
+      navigator.vibrate(50); // Short vibration
     }
-    setIsSwipeOpen(false);
-    setSwipeDirection(null);
+    
+    setIsActing(true);
+    
+    try {
+      if (swipeDirection === 'call') {
+        await onCall(participant);
+      } else if (swipeDirection === 'delete') {
+        await onDelete(participant.id);
+      }
+    } finally {
+      setIsActing(false);
+      setIsSwipeOpen(false);
+      setSwipeDirection(null);
+    }
   };
+
 
   return (
     <div 
@@ -124,14 +164,16 @@ const SwipeableParticipantRow = ({ participant, onCall, onDelete, isSelected, on
           <input
             type="checkbox"
             checked={isSelected}
-            onChange={(e) => onSelect(participant.id, e.target.checked)}
-            className="mr-3 hidden md:block"
+            onChange={handleCheckboxChange}
+            className="mr-3 hidden md:block w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500"
           />
         )}
         
         <div className="flex-1 min-w-0">
           <div className="flex items-center">
-            <h4 className="font-medium text-white truncate">{participant.fullName}</h4>
+            <h4 className="font-medium text-white truncate">
+              {participant.fullName || participant.name}
+            </h4>
             {/* Role Badge */}
             {participant.role === 'DEVOTEE' && (
               <span className="ml-2 px-2 py-1 bg-orange-500/20 text-orange-300 text-xs rounded">
@@ -158,17 +200,17 @@ const SwipeableParticipantRow = ({ participant, onCall, onDelete, isSelected, on
         <div className="hidden md:flex space-x-2 flex-shrink-0">
           <button
             onClick={() => onCall(participant)}
-            className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded text-sm transition-colors"
+            className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded text-sm transition-colors flex items-center gap-1"
             title="Call Participant"
           >
-            📞
+            <IoCallOutline className="text-lg" />
           </button>
           <button
             onClick={() => onDelete(participant.id)}
-            className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded text-sm transition-colors"
+            className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded text-sm transition-colors flex items-center gap-1"
             title="Delete Participant"
           >
-            🗑️
+            <IoTrashOutline className="text-lg" />
           </button>
         </div>
       </div>
@@ -181,7 +223,7 @@ const SwipeableParticipantRow = ({ participant, onCall, onDelete, isSelected, on
               className="absolute left-0 top-0 h-full w-16 bg-green-600 flex items-center justify-center cursor-pointer md:hidden z-10"
               onClick={handleAction}
             >
-              <span className="text-white text-2xl">📞</span>
+              <IoCallOutline className="text-white text-2xl" />
             </div>
           )}
           
@@ -190,7 +232,7 @@ const SwipeableParticipantRow = ({ participant, onCall, onDelete, isSelected, on
               className="absolute right-0 top-0 h-full w-16 bg-red-600 flex items-center justify-center cursor-pointer md:hidden z-10"
               onClick={handleAction}
             >
-              <span className="text-white text-2xl">🗑️</span>
+              <IoTrashOutline className="text-white text-2xl" />
             </div>
           )}
         </>
@@ -198,6 +240,7 @@ const SwipeableParticipantRow = ({ participant, onCall, onDelete, isSelected, on
     </div>
   );
 };
+
 
 const EnhancedAdminPanel = ({ eventSettings }) => {
   const { user } = useAuth();
@@ -250,43 +293,53 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
   };
 
   // ✅ NEW: Call participant function
+  // 🔧 IMPROVED: Enhanced phone number handling
   const handleCallParticipant = (participant) => {
     try {
-      // Clean the number (remove any spaces, dashes, special characters)
-      const cleanNumber = participant.phone.replace(/\D/g, '');
+      let cleanNumber = participant.phone.replace(/[^\d+]/g, '');
       
-      // Format for calling - append +91 if needed
-      const callNumber = cleanNumber.startsWith('91') && cleanNumber.length === 12
-        ? `+${cleanNumber}` 
-        : `+91${cleanNumber}`;
+      // Handle different number formats
+      if (cleanNumber.startsWith('+91')) {
+        // Already formatted
+        window.open(`tel:${cleanNumber}`);
+      } else if (cleanNumber.startsWith('91') && cleanNumber.length === 12) {
+        // Add + prefix
+        window.open(`tel:+${cleanNumber}`);
+      } else if (cleanNumber.length === 10) {
+        // Standard 10-digit Indian number
+        window.open(`tel:+91${cleanNumber}`);
+      } else {
+        // Fallback - use as-is but show warning
+        console.warn('Unusual phone number format:', participant.phone);
+        window.open(`tel:${cleanNumber}`);
+      }
       
-      // Make the call
-      window.open(`tel:${callNumber}`);
-      
-      showMessage('success', `📞 Calling ${participant.fullName} at ${callNumber}`);
-      console.log(`Calling ${participant.fullName} at ${callNumber}`);
+      showMessage('success', `📞 Calling ${participant.fullName || participant.name}`);
     } catch (error) {
-      showMessage('error', 'Failed to initiate call');
       console.error('Call error:', error);
+      showMessage('error', 'Failed to initiate call');
     }
   };
 
+
   // ✅ NEW: Delete participant function
+  // 🔧 IMPROVED: Add individual loading states
+  const [deletingIds, setDeletingIds] = useState(new Set());
+
   const handleDeleteParticipant = async (participantId) => {
     const participant = participants.find(p => p.id === participantId);
     if (!participant) return;
 
-    if (window.confirm(`Are you sure you want to delete "${participant.fullName}"?\n\nThis action cannot be undone.`)) {
+    if (window.confirm(`Delete "${participant.fullName || participant.name}"?\n\nThis cannot be undone.`)) {
       try {
-        setLoading(true);
+        // Add to loading set
+        setDeletingIds(prev => new Set([...prev, participantId]));
         
-        // Delete from Firebase
         await deleteDoc(doc(db, USERS_COLLECTION, participantId));
         
-        showMessage('success', `🗑️ Deleted ${participant.fullName} successfully`);
-        console.log(`Deleted participant: ${participant.fullName}`);
+        showMessage('success', `🗑️ Deleted ${participant.fullName || participant.name}`);
         
-        // Remove from selected if it was selected
+        // Clean up selections
         if (selectedParticipants.has(participantId)) {
           const newSelected = new Set(selectedParticipants);
           newSelected.delete(participantId);
@@ -294,10 +347,15 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
         }
         
       } catch (error) {
-        showMessage('error', `Failed to delete ${participant.fullName}: ${error.message}`);
         console.error('Delete error:', error);
+        showMessage('error', `Failed to delete ${participant.fullName || participant.name}`);
       } finally {
-        setLoading(false);
+        // Remove from loading set
+        setDeletingIds(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(participantId);
+          return newSet;
+        });
       }
     }
   };
@@ -589,8 +647,9 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
           {/* Participant Controls */}
           <div className="card-devotional">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
-              <h3 className="text-xl font-semibold text-gray-300">
-                👥 Participant Management ({filteredParticipants.length})
+              <h3 className="text-xl font-semibold text-gray-300 flex items-center gap-2">
+                <IoPeople className="text-saffron-500" />
+                Participant Management ({filteredParticipants.length})
               </h3>
               
               {/* Desktop Controls */}
@@ -619,12 +678,13 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
                     setIsMultiSelectMode(!isMultiSelectMode);
                     setSelectedParticipants(new Set());
                   }}
-                  className={`px-4 py-1 rounded text-sm transition-colors hidden md:block ${
+                  className={`px-4 py-1 rounded text-sm transition-colors hidden md:flex items-center gap-2 ${
                     isMultiSelectMode 
                       ? 'bg-blue-500 text-white' 
                       : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                   }`}
                 >
+                  <IoCheckboxOutline />
                   {isMultiSelectMode ? 'Cancel Selection' : 'Multi Select'}
                 </button>
                 
@@ -633,17 +693,20 @@ const EnhancedAdminPanel = ({ eventSettings }) => {
                   <button
                     onClick={handleMultiDelete}
                     disabled={loading}
-                    className="px-4 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm transition-colors disabled:opacity-50"
+                    className="px-4 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm transition-colors disabled:opacity-50 flex items-center gap-2"
                   >
-                    🗑️ Delete Selected ({selectedParticipants.size})
+                    <IoTrashOutline />
+                    Delete Selected ({selectedParticipants.size})
                   </button>
                 )}
+
               </div>
             </div>
 
             {/* Mobile Instructions */}
-            <div className="md:hidden mb-4 p-3 bg-gray-800/50 rounded-lg text-sm text-gray-400">
-              📱 <strong>Mobile:</strong> Swipe right to call, swipe left to delete
+            <div className="md:hidden mb-4 p-3 bg-gray-800/50 rounded-lg text-sm text-gray-400 flex items-center gap-2">
+              <IoPhonePortraitOutline />
+              <strong>Mobile:</strong> Swipe right to call, swipe left to delete
             </div>
 
             {/* Participants List */}
