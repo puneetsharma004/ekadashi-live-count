@@ -1,5 +1,6 @@
 import React from 'react';
 import { IoHome, IoBookmarks, IoTrophy } from 'react-icons/io5';
+import { GiPrayerBeads } from "react-icons/gi";
 
 const MobileBottomNav = ({ activeSection, setActiveSection }) => {
   const navItems = [
@@ -13,7 +14,7 @@ const MobileBottomNav = ({ activeSection, setActiveSection }) => {
     {
       id: 'japa',
       label: 'Japa',
-      icon: IoBookmarks,
+      icon: GiPrayerBeads,
       activeColor: 'text-devotional-gold',
       inactiveColor: 'text-gray-500'
     },
