@@ -1,6 +1,6 @@
 import React from 'react';
 import ProgressBar from '../ProgressBar';
-
+import { BsCalendar2EventFill } from "react-icons/bs";
 const EventSection = ({ 
   user, 
   eventSettings, 

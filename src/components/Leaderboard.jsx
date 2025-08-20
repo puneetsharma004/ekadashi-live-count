@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { subscribeToLeaderboard } from '../services/firebase.js';
+import { FaStar, FaCrown } from "react-icons/fa";
 
 const Leaderboard = () => {
   const { user } = useAuth();
@@ -179,9 +180,11 @@ const Leaderboard = () => {
                   <div className="ml-2 w-6 flex justify-center flex-shrink-0">
                     {isTopThree && participant.chantCount > 0 && (
                       <>
-                        {rank === 1 && <span className="text-yellow-400">👑</span>}
-                        {rank === 2 && <span className="text-gray-300">⭐</span>}
-                        {rank === 3 && <span className="text-orange-400">🌟</span>}
+
+                        {rank === 1 && <FaCrown className="text-yellow-400" />}
+                        {rank === 2 && <FaStar className="text-gray-300" />}
+                        {rank === 3 && <FaStar className="text-orange-400" />}
+
                       </>
                     )}
                   </div>

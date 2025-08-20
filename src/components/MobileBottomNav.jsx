@@ -1,5 +1,6 @@
 import React from 'react';
-import { IoHome, IoBookmarks, IoTrophy } from 'react-icons/io5';
+import { IoTrophy } from 'react-icons/io5';
+import { BsCalendar2EventFill } from "react-icons/bs";
 import { GiPrayerBeads } from "react-icons/gi";
 
 const MobileBottomNav = ({ activeSection, setActiveSection }) => {
@@ -7,7 +8,7 @@ const MobileBottomNav = ({ activeSection, setActiveSection }) => {
     {
       id: 'event',
       label: 'Event',
-      icon: IoHome,
+      icon: BsCalendar2EventFill,
       activeColor: 'text-saffron-400',
       inactiveColor: 'text-gray-500'
     },
