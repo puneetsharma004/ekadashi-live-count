@@ -28,23 +28,24 @@ const Home = ({ eventSettings: propEventSettings }) => {
   const userIsAdmin = user && isAdmin(user.phone);
 
   /* ---------- generic tick for every increment ---------- */
-  useHapticOnChange(globalCount);          // 35 ms default pulse
+  useHapticOnChange(globalCount, 35, 3000); // 3-second minimum gap
+       // 35 ms default pulse
 
   /* ---------- milestone buzz (first time goal is reached) ---------- */
-  const milestonePattern = [40, 30, 40];   // double-tap
-  const prevCountRef = useRef(globalCount);
+  // const milestonePattern = [40, 30, 40];   // double-tap
+  // const prevCountRef = useRef(globalCount);
 
-  const crossedGoal =
-    globalCount > 0 &&
-    prevCountRef.current < globalGoal &&    // was below
-    globalCount >= globalGoal;              // now at/above
+  // const crossedGoal =
+  //   globalCount > 0 &&
+  //   prevCountRef.current < globalGoal &&    // was below
+  //   globalCount >= globalGoal;              // now at/above
 
-  useHapticOnChange(crossedGoal ? globalCount : null, milestonePattern);
+  // useHapticOnChange(crossedGoal ? globalCount : null, milestonePattern);
 
-  /* keep prevCount in sync for next render */
-  useEffect(() => {
-    prevCountRef.current = globalCount;
-  }, [globalCount]);
+  // /* keep prevCount in sync for next render */
+  // useEffect(() => {
+  //   prevCountRef.current = globalCount;
+  // }, [globalCount]);
 
 
 
