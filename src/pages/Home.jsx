@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { subscribeToGlobalCount, isAdmin, subscribeToUserChantCount } from '../services/firebase.js';
 import { useEventSettings } from '../hooks/useEventSettings';
@@ -9,6 +9,7 @@ import MobileBottomNav from '../components/MobileBottomNav';
 import EventSection from '../components/sections/EventSection';
 import JapaSection from '../components/sections/JapaSection';
 import LeaderboardSection from '../components/sections/LeaderboardSection';
+import useHapticOnChange from '../hooks/useHapticOnChange.js';
 
 const Home = ({ eventSettings: propEventSettings }) => {
   
@@ -26,7 +27,26 @@ const Home = ({ eventSettings: propEventSettings }) => {
 
   const userIsAdmin = user && isAdmin(user.phone);
 
-  
+  /* ---------- generic tick for every increment ---------- */
+  useHapticOnChange(globalCount);          // 35 ms default pulse
+
+  /* ---------- milestone buzz (first time goal is reached) ---------- */
+  const milestonePattern = [40, 30, 40];   // double-tap
+  const prevCountRef = useRef(globalCount);
+
+  const crossedGoal =
+    globalCount > 0 &&
+    prevCountRef.current < globalGoal &&    // was below
+    globalCount >= globalGoal;              // now at/above
+
+  useHapticOnChange(crossedGoal ? globalCount : null, milestonePattern);
+
+  /* keep prevCount in sync for next render */
+  useEffect(() => {
+    prevCountRef.current = globalCount;
+  }, [globalCount]);
+
+
 
   useEffect(() => {
     const unsubscribe = subscribeToGlobalCount((totalCount) => {
